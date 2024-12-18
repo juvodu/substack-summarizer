@@ -1,110 +1,218 @@
-from flask import Flask, render_template, jsonify, request
-import requests
+from flask import Flask, render_template, jsonify
 from bs4 import BeautifulSoup
 from openai import OpenAI
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+from playwright.async_api import async_playwright
+import asyncio
+from functools import wraps
+from asgiref.sync import async_to_sync
+import json
+import httpx
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
+client = OpenAI(
+    api_key=os.getenv('OPENAI_API_KEY'),
+    http_client=httpx.Client()
+)
 
-# Temporary storage for articles and summaries
-# In a production app, you'd want to use a proper database
-articles = {}
+# Cache for article summaries
+article_summaries = {}
+
+def async_route(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        return async_to_sync(f)(*args, **kwargs)
+    return wrapper
+
+async def get_article_content(page, url):
+    """Extract article content using Playwright"""
+    try:
+        print(f"Navigating to article: {url}")
+        await page.goto(url)
+        
+        # Wait for article content to load
+        article = await page.wait_for_selector('article')
+        if article:
+            content = await article.inner_text()
+            print(f"Found article content: {len(content)} characters")
+            return content
+        print("No article element found")
+        return "Error: Could not find article content"
+    except Exception as e:
+        print(f"Error fetching article content: {str(e)}")
+        return f"Error: {str(e)}"
 
 def generate_summary(content):
     """Generate a summary using OpenAI's API"""
     try:
-        print(f"Generating summary for content of length: {len(content)}")
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that creates concise summaries of articles."},
-                {"role": "user", "content": f"Please provide a concise summary of this article: {content}"}
+                {"role": "user", "content": f"Please provide a 2-3 sentence summary of this article:\n\n{content}"}
             ],
             max_tokens=150
         )
-        summary = response.choices[0].message.content
-        print(f"Generated summary: {summary}")
-        return summary
+        return response.choices[0].message.content
     except Exception as e:
-        print(f"Error in generate_summary: {str(e)}")
+        print(f"Error generating summary: {str(e)}")
         return f"Error generating summary: {str(e)}"
 
-def extract_article_content(url):
-    """Extract article content from Substack URL"""
-    try:
-        print(f"Fetching article from: {url}")
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
+async def get_inbox_articles():
+    """Fetch articles from Substack inbox using Playwright"""
+    articles = []
+    
+    async with async_playwright() as p:
+        print("Launching browser...")
+        browser = await p.chromium.launch(
+            headless=False,  # Set to False to see what's happening
+            slow_mo=50  # Slow down operations to see what's happening
+        )
+        context = await browser.new_context()
+        page = await context.new_page()
         
-        # Find the main article content
-        article_content = []
-        
-        # Get the title
-        title = soup.find('h1', class_='post-title')
-        if title:
-            print(f"Found title: {title.get_text().strip()}")
-            article_content.append(title.get_text().strip())
-        else:
-            print("No title found")
-        
-        # Get the main content
-        content_div = soup.find('div', class_='body markup')
-        if content_div:
-            print("Found main content div")
-            paragraphs = content_div.find_all(['p', 'h2', 'h3', 'blockquote'])
-            for p in paragraphs:
-                article_content.append(p.get_text().strip())
-            print(f"Extracted {len(paragraphs)} paragraphs")
-        else:
-            print("No main content div found")
-        
-        content = "\n\n".join(article_content)
-        print(f"Total content length: {len(content)} characters")
-        return content
-    except Exception as e:
-        print(f"Error in extract_article_content: {str(e)}")
-        return f"Error extracting content: {str(e)}"
+        try:
+            print("Navigating to Substack login page...")
+            await page.goto('https://substack.com/sign-in')
+            
+            print("Waiting for successful login...")
+            print("Please log in to your Substack account in the browser window.")
+            print("You have 60 seconds to complete the login.")
+            
+            try:
+                # Wait for the Dashboard button to appear (indicates successful login)
+                print("Waiting for login completion...")
+                try:
+                    await page.wait_for_selector('button:has-text("Dashboard")', timeout=60000)
+                    print("Login successful! Dashboard button found.")
+                except Exception as e:
+                    print("Login failed - Dashboard button not found:", str(e))
+                    await page.screenshot(path='login_timeout.png')
+                    print("Saving page content for debugging...")
+                    content = await page.content()
+                    with open('login_page.html', 'w') as f:
+                        f.write(content)
+                    return []
+
+                print("Login successful, navigating to inbox...")
+                await page.goto('https://substack.com/inbox')
+                
+                # Wait for inbox to load
+                print("Waiting for inbox to load...")
+                await asyncio.sleep(2)  # Give the page a moment to load
+                
+            except Exception as e:
+                print("Login wait timed out or failed:", str(e))
+                await page.screenshot(path='login_timeout.png')
+                print("Saving page content for debugging...")
+                content = await page.content()
+                with open('login_page.html', 'w') as f:
+                    f.write(content)
+                return []
+            
+            print("Looking for article links...")
+            # Try different selectors in order of specificity
+            selectors_to_try = [
+                'a[href*="/p/"]',  # Standard article links
+                '.post-preview a',  # Post preview links
+                'article a',        # Any link within article tags
+                '.post-title a',    # Post title links
+                '.post a',          # Any link within post class
+                'a[href*="substack.com"]'  # Any Substack link
+            ]
+            
+            # First collect all article information before processing
+            article_infos = []
+            for selector in selectors_to_try:
+                print(f"Trying selector: {selector}")
+                links = await page.query_selector_all(selector)
+                print(f"Found {len(links)} links with {selector}")
+                if links:
+                    # Collect all article info first
+                    for link in links[:3]:  # Only process top 3
+                        try:
+                            url = await link.get_attribute('href')
+                            title = await link.inner_text()
+                            if url and title:
+                                article_infos.append({
+                                    'url': url,
+                                    'title': title.strip()
+                                })
+                        except Exception as e:
+                            print(f"Error collecting article info: {str(e)}")
+                    break  # Use the first successful selector
+            
+            print(f"Collected info for {len(article_infos)} articles")
+            
+            # Now process each article
+            for article_info in article_infos:
+                url = article_info['url']
+                title = article_info['title']
+                print(f"\nProcessing article: {title}")
+                
+                # Generate unique ID for the article
+                article_id = url
+                
+                if article_id not in article_summaries:
+                    content = await get_article_content(page, url)
+                    if not content.startswith("Error"):
+                        summary = generate_summary(content)
+                        if not summary.startswith("Error"):
+                            article_summaries[article_id] = {
+                                'title': title,
+                                'summary': summary,
+                                'link': url,
+                                'date': 'Recent'
+                            }
+                            print(f"Generated new summary for: {title}")
+                        else:
+                            print(f"Error generating summary: {summary}")
+                    else:
+                        print(f"Error getting content: {content}")
+                else:
+                    print(f"Using cached summary for: {title}")
+                
+                if article_id in article_summaries:
+                    articles.append(article_summaries[article_id])
+            
+            print(f"\nReturning {len(articles)} articles")
+            
+            # If no articles found, take a screenshot for debugging
+            if len(articles) == 0:
+                print("No articles found, taking screenshot...")
+                await page.screenshot(path='debug_screenshot.png')
+                print("Screenshot saved as debug_screenshot.png")
+            
+            # Wait for user input before closing
+            if len(articles) == 0:
+                print("\nKeeping browser open for 60 seconds...")
+                await asyncio.sleep(60)  # Keep browser open for 60 seconds
+            
+        except Exception as e:
+            print(f"Error fetching inbox: {str(e)}")
+            # Take a screenshot on error
+            await page.screenshot(path='error_screenshot.png')
+            print("Error screenshot saved as error_screenshot.png")
+            await asyncio.sleep(5)  # Keep browser open briefly on error
+        finally:
+            await asyncio.sleep(2)  # Give time to see what happened
+            await context.close()
+            await browser.close()
+    
+    return articles
 
 @app.route('/')
-def home():
-    return render_template('index.html', articles=articles)
+def index():
+    return render_template('index.html')
 
-@app.route('/add_article', methods=['POST'])
-def add_article():
-    data = request.json
-    url = data.get('url')
-    title = data.get('title')
-    
-    if url and title:
-        print(f"Processing article: {title} from {url}")
-        content = extract_article_content(url)
-        if content.startswith("Error"):
-            return jsonify({'success': False, 'message': content})
-            
-        summary = generate_summary(content)
-        if summary.startswith("Error"):
-            return jsonify({'success': False, 'message': summary})
-        
-        articles[url] = {
-            'title': title,
-            'summary': summary,
-            'original_url': url
-        }
-        print(f"Successfully processed article: {title}")
-        return jsonify({'success': True, 'message': 'Article added successfully'})
-    return jsonify({'success': False, 'message': 'Missing URL or title'})
-
-@app.route('/get_summary/<path:url>')
-def get_summary(url):
-    article = articles.get(url)
-    if article:
-        return jsonify(article)
-    return jsonify({'error': 'Article not found'}), 404
+@app.route('/refresh')
+@async_route
+async def refresh():
+    articles = await get_inbox_articles()
+    return jsonify(articles)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

@@ -1,137 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Substack Summarizer</title>
+    <title>Substack Inbox Summarizer</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: #f5f5f5;
         }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
         }
-        .article-list {
-            list-style: none;
-            padding: 0;
-        }
-        .article-item {
-            padding: 15px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .article-item:hover {
-            background-color: #f0f0f0;
-        }
-        .summary-container {
-            margin-top: 20px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            display: none;
-        }
-        .input-group {
-            margin-bottom: 20px;
-        }
-        input[type="text"], input[type="url"] {
-            width: 100%;
-            padding: 8px;
-            margin: 5px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #007bff;
+        .refresh-button {
+            background: #FF6B6B;
             color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 4px;
+            border-radius: 5px;
             cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
         }
-        button:hover {
-            background-color: #0056b3;
+        .refresh-button:hover {
+            background: #FF5252;
+        }
+        .articles {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .article {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .article h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .article-summary {
+            color: #666;
+            line-height: 1.6;
+        }
+        .article-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #FF6B6B;
+            text-decoration: none;
+        }
+        .article-link:hover {
+            text-decoration: underline;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Substack Summarizer</h1>
-        
-        <div class="input-group">
-            <input type="text" id="articleTitle" placeholder="Article Title" required>
-            <input type="url" id="articleUrl" placeholder="Substack Article URL" required>
-            <button onclick="addArticle()">Add Article</button>
-        </div>
-
-        <ul class="article-list" id="articleList">
-            {% for url, article in articles.items() %}
-            <li class="article-item" onclick="showSummary('{{ url }}')">
-                {{ article.title }}
-            </li>
-            {% endfor %}
-        </ul>
-
-        <div id="summaryContainer" class="summary-container">
-            <h2 id="summaryTitle"></h2>
-            <p id="summaryContent"></p>
-            <a id="originalArticle" href="" target="_blank">Read Original Article</a>
-        </div>
+    <div class="header">
+        <h1>Substack Inbox Summarizer</h1>
+        <button class="refresh-button" onclick="refreshArticles()">Refresh Articles</button>
+    </div>
+    
+    <div id="articles" class="articles">
+        <div class="loading">Click refresh to load your latest articles...</div>
     </div>
 
     <script>
-        function addArticle() {
-            const title = document.getElementById('articleTitle').value;
-            const url = document.getElementById('articleUrl').value;
-
-            if (!title || !url) {
-                alert('Please fill in both title and URL');
-                return;
-            }
-
-            fetch('/add_article', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ title, url })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Error adding article: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error adding article');
-            });
-        }
-
-        function showSummary(url) {
-            fetch(`/get_summary/${encodeURIComponent(url)}`)
+        function refreshArticles() {
+            const articlesDiv = document.getElementById('articles');
+            articlesDiv.innerHTML = '<div class="loading">Loading articles...</div>';
+            
+            fetch('/refresh')
                 .then(response => response.json())
-                .then(article => {
-                    document.getElementById('summaryTitle').textContent = article.title;
-                    document.getElementById('summaryContent').textContent = article.summary;
-                    document.getElementById('originalArticle').href = article.original_url;
-                    document.getElementById('summaryContainer').style.display = 'block';
+                .then(articles => {
+                    if (articles.length === 0) {
+                        articlesDiv.innerHTML = '<div class="loading">No articles found</div>';
+                        return;
+                    }
+                    
+                    articlesDiv.innerHTML = articles.map(article => `
+                        <div class="article">
+                            <h2>${article.title}</h2>
+                            <div class="article-summary">${article.summary}</div>
+                            <a href="${article.link}" target="_blank" class="article-link">Read full article</a>
+                        </div>
+                    `).join('');
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error fetching summary');
+                    articlesDiv.innerHTML = '<div class="loading">Error loading articles</div>';
                 });
         }
     </script>
