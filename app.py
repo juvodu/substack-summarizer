@@ -78,40 +78,64 @@ async def get_inbox_articles():
             print("Navigating to Substack login page...")
             await page.goto('https://substack.com/sign-in')
             
-            print("Waiting for successful login...")
-            print("Please log in to your Substack account in the browser window.")
-            print("You have 60 seconds to complete the login.")
+            # Get credentials from env
+            email = os.getenv('SUBSTACK_EMAIL')
+            password = os.getenv('SUBSTACK_PASSWORD')
             
-            try:
-                # Wait for the Dashboard button to appear (indicates successful login)
-                print("Waiting for login completion...")
+            if not email or not password:
+                print("No credentials found in .env file. Please add SUBSTACK_EMAIL and SUBSTACK_PASSWORD")
+                print("Waiting for manual login...")
+                print("You have 60 seconds to complete the login.")
+                
                 try:
                     await page.wait_for_selector('button:has-text("Dashboard")', timeout=60000)
-                    print("Login successful! Dashboard button found.")
+                    print("Login successful!")
                 except Exception as e:
-                    print("Login failed - Dashboard button not found:", str(e))
+                    print("Login wait timed out or failed:", str(e))
                     await page.screenshot(path='login_timeout.png')
-                    print("Saving page content for debugging...")
-                    content = await page.content()
-                    with open('login_page.html', 'w') as f:
-                        f.write(content)
                     return []
+            else:
+                print("Attempting automatic login...")
+                try:
+                    # Wait for and fill email field
+                    await page.wait_for_selector('input[type="email"]')
+                    await page.fill('input[type="email"]', email)
+                    
+                    # Click the "Sign in with password" link
+                    login_option = await page.wait_for_selector('.login-option')
+                    await login_option.click()
+                    
+                    # Wait for and fill password field
+                    await page.wait_for_selector('input[type="password"]')
+                    await page.fill('input[type="password"]', password)
+                    
+                    # Click sign in button
+                    sign_in_button = await page.wait_for_selector('button:has-text("Continue")')
+                    await sign_in_button.click()
+                    
+                   # TODO: Handle 2FA via email
 
-                print("Login successful, navigating to inbox...")
-                await page.goto('https://substack.com/inbox')
-                
-                # Wait for inbox to load
-                print("Waiting for inbox to load...")
-                await asyncio.sleep(2)  # Give the page a moment to load
-                
-            except Exception as e:
-                print("Login wait timed out or failed:", str(e))
-                await page.screenshot(path='login_timeout.png')
-                print("Saving page content for debugging...")
-                content = await page.content()
-                with open('login_page.html', 'w') as f:
-                    f.write(content)
-                return []
+                    # Wait for successful login
+                    print("Waiting for login completion...")
+                    await page.wait_for_selector('button:has-text("Dashboard")', timeout=10000)
+                    print("Automatic login successful!")
+                    
+                except Exception as e:
+                    print(f"Automatic login failed: {str(e)}")
+                    print("Falling back to manual login...")
+                    print("Please log in manually. You have 60 seconds.")
+                    
+                    try:
+                        await page.wait_for_selector('button:has-text("Dashboard")', timeout=60000)
+                        print("Manual login successful!")
+                    except Exception as e:
+                        print("Login wait timed out or failed:", str(e))
+                        await page.screenshot(path='login_timeout.png')
+                        return []
+            
+            print("Navigating to inbox...")
+            await page.goto('https://substack.com/inbox')
+            await asyncio.sleep(2)  # Give the page a moment to load
             
             print("Looking for article links...")
             # Try different selectors in order of specificity
@@ -136,10 +160,38 @@ async def get_inbox_articles():
                         try:
                             url = await link.get_attribute('href')
                             title = await link.inner_text()
+                            
+                            # Try to find the thumbnail image
+                            thumbnail_url = None
+                            
+                            # Look for image in the article preview container
+                            try:
+                                # Find the thumbnail container and get the image src
+                                img_element = await page.evaluate('''(link) => {
+                                    // Find the closest article container
+                                    const articleContainer = link.closest('.reader2-post-container');
+                                    if (!articleContainer) return null;
+                                    
+                                    // Find the thumbnail container
+                                    const thumbnailContainer = articleContainer.querySelector('.reader2-post-picture-container');
+                                    if (!thumbnailContainer) return null;
+                                    
+                                    // Get the image source
+                                    const img = thumbnailContainer.querySelector('img');
+                                    return img ? img.src : null;
+                                }''', link)
+                                
+                                if img_element:
+                                    thumbnail_url = img_element
+                                    print(f"Found thumbnail: {thumbnail_url}")
+                            except Exception as e:
+                                print(f"Error finding thumbnail: {str(e)}")
+                            
                             if url and title:
                                 article_infos.append({
                                     'url': url,
-                                    'title': title.strip()
+                                    'title': title.strip(),
+                                    'thumbnail': thumbnail_url
                                 })
                         except Exception as e:
                             print(f"Error collecting article info: {str(e)}")
@@ -165,6 +217,7 @@ async def get_inbox_articles():
                                 'title': title,
                                 'summary': summary,
                                 'link': url,
+                                'thumbnail': article_info.get('thumbnail'),
                                 'date': 'Recent'
                             }
                             print(f"Generated new summary for: {title}")

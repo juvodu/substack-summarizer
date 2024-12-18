@@ -1,103 +1,158 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Substack Inbox Summarizer</title>
+    <title>Substack Summarizer</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background: #f5f5f5;
+            background-color: #f8f8f8;
         }
-        .header {
+
+        h1 {
+            color: #333;
             text-align: center;
             margin-bottom: 30px;
         }
-        .refresh-button {
-            background: #FF6B6B;
-            color: white;
-            border: none;
+
+        #refresh-button {
+            display: block;
+            margin: 20px auto;
             padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
             font-size: 16px;
-            margin-bottom: 20px;
+            color: white;
+            background-color: #FF6719;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
-        .refresh-button:hover {
-            background: #FF5252;
+
+        #refresh-button:hover {
+            background-color: #e65c17;
         }
-        .articles {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+
+        #articles {
+            margin-top: 30px;
         }
+
         .article {
             background: white;
+            border-radius: 8px;
             padding: 20px;
-            border-radius: 10px;
+            margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 20px;
+            transition: transform 0.2s;
         }
-        .article h2 {
-            margin-top: 0;
+
+        .article:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .article-thumbnail {
+            flex: 0 0 200px;
+            height: 134px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .article-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .article-content {
+            flex: 1;
+        }
+
+        .article-title {
+            font-size: 20px;
+            font-weight: 600;
             color: #333;
-        }
-        .article-summary {
-            color: #666;
-            line-height: 1.6;
-        }
-        .article-link {
-            display: inline-block;
-            margin-top: 10px;
-            color: #FF6B6B;
+            margin: 0 0 10px 0;
             text-decoration: none;
         }
-        .article-link:hover {
-            text-decoration: underline;
+
+        .article-title:hover {
+            color: #FF6719;
         }
+
+        .article-summary {
+            color: #666;
+            font-size: 16px;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .article-date {
+            color: #999;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
         .loading {
             text-align: center;
             color: #666;
-            font-style: italic;
+            padding: 20px;
+            display: none;
+        }
+
+        .placeholder-thumbnail {
+            background-color: #eee;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Substack Inbox Summarizer</h1>
-        <button class="refresh-button" onclick="refreshArticles()">Refresh Articles</button>
-    </div>
-    
-    <div id="articles" class="articles">
-        <div class="loading">Click refresh to load your latest articles...</div>
-    </div>
+    <h1>Substack Summarizer</h1>
+    <button id="refresh-button">Refresh Articles</button>
+    <div id="loading" class="loading">Loading articles...</div>
+    <div id="articles"></div>
 
     <script>
         function refreshArticles() {
-            const articlesDiv = document.getElementById('articles');
-            articlesDiv.innerHTML = '<div class="loading">Loading articles...</div>';
+            $('#loading').show();
+            $('#articles').empty();
             
-            fetch('/refresh')
-                .then(response => response.json())
-                .then(articles => {
-                    if (articles.length === 0) {
-                        articlesDiv.innerHTML = '<div class="loading">No articles found</div>';
-                        return;
-                    }
+            $.get('/refresh', function(articles) {
+                $('#loading').hide();
+                articles.forEach(function(article) {
+                    const thumbnailHtml = article.thumbnail 
+                        ? `<img src="${article.thumbnail}" alt="${article.title}">`
+                        : `<div class="placeholder-thumbnail">No image</div>`;
                     
-                    articlesDiv.innerHTML = articles.map(article => `
+                    $('#articles').append(`
                         <div class="article">
-                            <h2>${article.title}</h2>
-                            <div class="article-summary">${article.summary}</div>
-                            <a href="${article.link}" target="_blank" class="article-link">Read full article</a>
+                            <div class="article-thumbnail">
+                                ${thumbnailHtml}
+                            </div>
+                            <div class="article-content">
+                                <a href="${article.link}" target="_blank" class="article-title">
+                                    ${article.title}
+                                </a>
+                                <p class="article-summary">${article.summary}</p>
+                                <div class="article-date">${article.date}</div>
+                            </div>
                         </div>
-                    `).join('');
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    articlesDiv.innerHTML = '<div class="loading">Error loading articles</div>';
+                    `);
                 });
+            });
         }
+
+        $('#refresh-button').click(refreshArticles);
     </script>
 </body>
 </html>
