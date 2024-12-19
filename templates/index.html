@@ -8,7 +8,17 @@
 </head>
 <body>
     <h1>Substack AI Summarizer</h1>
-    <button id="refresh-button">Refresh Articles</button>
+    <div id="refresh-button-container">
+        <button id="refresh-button">Refresh Articles</button>
+    </div>
+
+    <div class="progress-container" id="progress-container">
+        <div class="progress-bar">
+            <div class="progress-bar-fill"></div>
+        </div>
+        <div class="progress-text">Loading articles from Substack...</div>
+    </div>
+
     <div id="loading" class="loading">Loading articles...</div>
     <div id="articles"></div>
 
@@ -52,6 +62,10 @@
 
         async function refreshArticles() {
             try {
+                // Show progress bar
+                $('#progress-container').show();
+                $('#refresh-button').prop('disabled', true);
+                
                 // Clear existing articles
                 $('#articles').empty();
                 
@@ -59,7 +73,12 @@
                 const response = await $.get('/refresh');
                 const articles = response.articles;
                 
+                // Hide progress bar
+                $('#progress-container').hide();
+                $('#refresh-button').prop('disabled', false);
+                
                 if (articles.length === 0) {
+                    $('#articles').html('<div class="error-message">No articles found. Please try again.</div>');
                     return;
                 }
                 
@@ -104,12 +123,16 @@
                 
             } catch (error) {
                 console.error('Error refreshing articles:', error);
+                // Hide progress bar and show error
+                $('#progress-container').hide();
+                $('#refresh-button').prop('disabled', false);
+                $('#articles').html('<div class="error-message">Failed to load articles. Please try again.</div>');
             }
         }
 
         $(document).ready(function() {
+            // Only set up the click handler, don't call refreshArticles automatically
             $('#refresh-button').click(refreshArticles);
-            refreshArticles();
         });
     </script>
 </body>
