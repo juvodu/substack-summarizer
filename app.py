@@ -188,11 +188,39 @@ async def get_inbox_articles():
                                 print(f"Error finding thumbnail: {str(e)}")
                             
                             if url and title:
-                                article_infos.append({
-                                    'url': url,
-                                    'title': title.strip(),
-                                    'thumbnail': thumbnail_url
-                                })
+                                # Extract blog name and date from the container
+                                try:
+                                    blog_info = await page.evaluate('''(link) => {
+                                        const container = link.closest('.reader2-post-container');
+                                        if (!container) return null;
+                                        
+                                        // Get blog name from the pub-name class anchor
+                                        const pubElement = container.querySelector('.pub-name a');
+                                        const blogName = pubElement ? pubElement.innerText.trim() : null;
+                                        
+                                        // Get date from the inbox-item-timestamp class
+                                        const dateElement = container.querySelector('.inbox-item-timestamp');
+                                        const date = dateElement ? dateElement.innerText.trim() : null;
+                                        
+                                        return { blogName, date };
+                                    }''', link)
+                                    
+                                    article_infos.append({
+                                        'url': url,
+                                        'title': title.strip(),
+                                        'thumbnail': thumbnail_url,
+                                        'blog_name': blog_info['blogName'] if blog_info else 'Unknown Blog',
+                                        'date': blog_info['date'] if blog_info else ''
+                                    })
+                                except Exception as e:
+                                    print(f"Error extracting blog info: {str(e)}")
+                                    article_infos.append({
+                                        'url': url,
+                                        'title': title.strip(),
+                                        'thumbnail': thumbnail_url,
+                                        'blog_name': 'Unknown Blog',
+                                        'date': ''
+                                    })
                         except Exception as e:
                             print(f"Error collecting article info: {str(e)}")
                     break  # Use the first successful selector
@@ -218,7 +246,8 @@ async def get_inbox_articles():
                                 'summary': summary,
                                 'link': url,
                                 'thumbnail': article_info.get('thumbnail'),
-                                'date': 'Recent'
+                                'blog_name': article_info.get('blog_name'),
+                                'date': article_info.get('date')
                             }
                             print(f"Generated new summary for: {title}")
                         else:
