@@ -78,11 +78,6 @@
             font-weight: 600;
             color: #333;
             margin: 0 0 10px 0;
-            text-decoration: none;
-        }
-
-        .article-title:hover {
-            color: #FF6719;
         }
 
         .article-summary {
@@ -90,6 +85,19 @@
             font-size: 16px;
             margin: 0;
             line-height: 1.5;
+        }
+
+        .article-link {
+            display: inline-block;
+            margin-top: 12px;
+            color: #FF6719;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .article-link:hover {
+            text-decoration: underline;
         }
 
         .article-date {
@@ -134,20 +142,20 @@
                         ? `<img src="${article.thumbnail}" alt="${article.title}">`
                         : `<div class="placeholder-thumbnail">No image</div>`;
                     
-                    $('#articles').append(`
+                    const articleHtml = `
                         <div class="article">
                             <div class="article-thumbnail">
                                 ${thumbnailHtml}
                             </div>
                             <div class="article-content">
-                                <a href="${article.link}" target="_blank" class="article-title">
-                                    ${article.title}
-                                </a>
+                                <h2 class="article-title">${article.title}</h2>
                                 <p class="article-summary">${article.summary}</p>
-                                <div class="article-date">${article.date}</div>
+                                <a href="${article.link}" class="article-link" target="_blank">Full Article →</a>
                             </div>
                         </div>
-                    `);
+                    `;
+                    
+                    $('#articles').append(articleHtml);
                 });
             });
         }
