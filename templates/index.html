@@ -127,11 +127,33 @@
             line-height: 1.4;
         }
 
+        .article-summary-container {
+            margin: 15px 0;
+        }
+
         .article-summary {
             color: #666;
             font-size: 16px;
             margin: 0;
             line-height: 1.5;
+        }
+
+        .ai-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background-color: #f0f7ff;
+            color: #0066cc;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .ai-badge svg {
+            width: 14px;
+            height: 14px;
         }
 
         .article-meta {
@@ -200,7 +222,17 @@
                                 <div class="article-content">
                                     <h2 class="article-title">${article.title}</h2>
                                     ${article.subtitle ? `<div class="article-subtitle">${article.subtitle}</div>` : ''}
-                                    <p class="article-summary">${article.summary}</p>
+                                    <div class="article-summary-container">
+                                        <div class="ai-badge">
+                                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            AI Summary
+                                        </div>
+                                        <p class="article-summary">${article.summary}</p>
+                                    </div>
                                     <div class="article-meta">
                                         ${article.metaText}
                                     </div>
