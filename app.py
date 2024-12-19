@@ -159,68 +159,69 @@ async def get_inbox_articles():
                     for link in links[:3]:  # Only process top 3
                         try:
                             url = await link.get_attribute('href')
-                            title = await link.inner_text()
                             
-                            # Try to find the thumbnail image
-                            thumbnail_url = None
-                            
-                            # Look for image in the article preview container
+                            # Look for thumbnails and metadata in the article preview container
                             try:
-                                # Find the thumbnail container and get the image src
-                                img_element = await page.evaluate('''(link) => {
-                                    // Find the closest article container
-                                    const articleContainer = link.closest('.reader2-post-container');
-                                    if (!articleContainer) return null;
+                                # Find thumbnails, title and metadata
+                                container_info = await page.evaluate('''(link) => {
+                                    const container = link.closest('.reader2-post-container');
+                                    if (!container) return null;
                                     
-                                    // Find the thumbnail container
-                                    const thumbnailContainer = articleContainer.querySelector('.reader2-post-picture-container');
-                                    if (!thumbnailContainer) return null;
+                                    // Get blog name and thumbnail
+                                    const pubElement = container.querySelector('.pub-name a');
+                                    const blogName = pubElement ? pubElement.innerText.trim() : null;
                                     
-                                    // Get the image source
-                                    const img = thumbnailContainer.querySelector('img');
-                                    return img ? img.src : null;
+                                    const blogThumbContainer = container.querySelector('.reader2-post-head img');
+                                    const blogThumbnail = blogThumbContainer ? blogThumbContainer.src : null;
+                                    
+                                    // Get article title and thumbnail
+                                    const titleElement = container.querySelector('.reader2-post-title');
+                                    const title = titleElement ? titleElement.innerText.trim() : null;
+                                    
+                                    // Get subtitle
+                                    const subtitleElement = container.querySelector('.reader2-secondary');
+                                    const subtitle = subtitleElement ? subtitleElement.innerText.trim() : null;
+                                    
+                                    const articleThumbContainer = container.querySelector('.reader2-post-picture-container img');
+                                    const articleThumbnail = articleThumbContainer ? articleThumbContainer.src : null;
+                                    
+                                    // Get date
+                                    const dateElement = container.querySelector('.inbox-item-timestamp');
+                                    const date = dateElement ? dateElement.innerText.trim() : null;
+                                    
+                                    return { 
+                                        blogName, 
+                                        blogThumbnail,
+                                        title,
+                                        subtitle,
+                                        articleThumbnail,
+                                        date 
+                                    };
                                 }''', link)
                                 
-                                if img_element:
-                                    thumbnail_url = img_element
-                                    print(f"Found thumbnail: {thumbnail_url}")
+                                if container_info:
+                                    blog_thumbnail = container_info['blogThumbnail']
+                                    article_thumbnail = container_info['articleThumbnail']
+                                    title = container_info['title']
+                                    subtitle = container_info['subtitle']
+                                    if blog_thumbnail:
+                                        print(f"Found blog thumbnail: {blog_thumbnail}")
+                                    if article_thumbnail:
+                                        print(f"Found article thumbnail: {article_thumbnail}")
+                                
                             except Exception as e:
-                                print(f"Error finding thumbnail: {str(e)}")
+                                print(f"Error finding article info: {str(e)}")
                             
                             if url and title:
-                                # Extract blog name and date from the container
-                                try:
-                                    blog_info = await page.evaluate('''(link) => {
-                                        const container = link.closest('.reader2-post-container');
-                                        if (!container) return null;
-                                        
-                                        // Get blog name from the pub-name class anchor
-                                        const pubElement = container.querySelector('.pub-name a');
-                                        const blogName = pubElement ? pubElement.innerText.trim() : null;
-                                        
-                                        // Get date from the inbox-item-timestamp class
-                                        const dateElement = container.querySelector('.inbox-item-timestamp');
-                                        const date = dateElement ? dateElement.innerText.trim() : null;
-                                        
-                                        return { blogName, date };
-                                    }''', link)
-                                    
-                                    article_infos.append({
-                                        'url': url,
-                                        'title': title.strip(),
-                                        'thumbnail': thumbnail_url,
-                                        'blog_name': blog_info['blogName'] if blog_info else 'Unknown Blog',
-                                        'date': blog_info['date'] if blog_info else ''
-                                    })
-                                except Exception as e:
-                                    print(f"Error extracting blog info: {str(e)}")
-                                    article_infos.append({
-                                        'url': url,
-                                        'title': title.strip(),
-                                        'thumbnail': thumbnail_url,
-                                        'blog_name': 'Unknown Blog',
-                                        'date': ''
-                                    })
+                                article_infos.append({
+                                    'url': url,
+                                    'title': title,
+                                    'subtitle': container_info['subtitle'] if container_info else '',
+                                    'article_thumbnail': article_thumbnail,
+                                    'blog_thumbnail': blog_thumbnail,
+                                    'blog_name': container_info['blogName'] if container_info else 'Unknown Blog',
+                                    'date': container_info['date'] if container_info else ''
+                                })
                         except Exception as e:
                             print(f"Error collecting article info: {str(e)}")
                     break  # Use the first successful selector
@@ -231,6 +232,7 @@ async def get_inbox_articles():
             for article_info in article_infos:
                 url = article_info['url']
                 title = article_info['title']
+                subtitle = article_info['subtitle']
                 print(f"\nProcessing article: {title}")
                 
                 # Generate unique ID for the article
@@ -243,9 +245,11 @@ async def get_inbox_articles():
                         if not summary.startswith("Error"):
                             article_summaries[article_id] = {
                                 'title': title,
+                                'subtitle': subtitle,
                                 'summary': summary,
                                 'link': url,
-                                'thumbnail': article_info.get('thumbnail'),
+                                'article_thumbnail': article_info.get('article_thumbnail'),
+                                'blog_thumbnail': article_info.get('blog_thumbnail'),
                                 'blog_name': article_info.get('blog_name'),
                                 'date': article_info.get('date')
                             }

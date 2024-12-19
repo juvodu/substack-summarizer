@@ -61,6 +61,24 @@
             margin-bottom: 15px;
         }
 
+        .blog-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .blog-thumbnail {
+            width: 24px;
+            height: 24px;
+            overflow: hidden;
+        }
+
+        .blog-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
         .article-blog-name {
             color: #FF6719;
             font-weight: 500;
@@ -99,7 +117,14 @@
             font-size: 20px;
             font-weight: 600;
             color: #333;
+            margin: 0 0 8px 0;
+        }
+
+        .article-subtitle {
+            font-size: 18px;
+            color: #666;
             margin: 0 0 15px 0;
+            line-height: 1.4;
         }
 
         .article-summary {
@@ -157,17 +182,23 @@
                     const articleHtml = `
                         <div class="article">
                             <div class="article-header">
-                                <div class="article-blog-name">${article.blog_name}</div>
+                                <div class="blog-info">
+                                    <div class="blog-thumbnail">
+                                        <img src="${article.blog_thumbnail || 'https://placeholder.com/24x24'}" alt="Blog thumbnail">
+                                    </div>
+                                    <div class="article-blog-name">${article.blog_name}</div>
+                                </div>
                                 <div class="article-date">${article.date}</div>
                             </div>
                             <div class="article-main">
                                 <div class="article-content">
                                     <h2 class="article-title">${article.title}</h2>
+                                    ${article.subtitle ? `<div class="article-subtitle">${article.subtitle}</div>` : ''}
                                     <p class="article-summary">${article.summary}</p>
                                     <a href="${article.link}" class="article-link" target="_blank">Full Article →</a>
                                 </div>
                                 <div class="article-thumbnail">
-                                    <img src="${article.thumbnail || 'https://placeholder.com/200x134'}" alt="Article thumbnail">
+                                    <img src="${article.article_thumbnail || 'https://placeholder.com/200x134'}" alt="Article thumbnail">
                                 </div>
                             </div>
                         </div>
