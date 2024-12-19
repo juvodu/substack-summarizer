@@ -12,55 +12,98 @@
     <div id="articles"></div>
 
     <script>
-        function refreshArticles() {
-            $('#loading').show();
-            $('#articles').empty();
-            
-            $.get('/refresh', function(articles) {
-                $('#loading').hide();
-                articles.forEach(function(article) {
-                    const articleHtml = `
-                        <div class="article">
-                            <div class="article-header">
-                                <div class="blog-info">
-                                    ${article.blog_thumbnail ? 
-                                        `<img class="blog-thumbnail" src="${article.blog_thumbnail}" alt="Blog thumbnail">` : 
-                                        '<div class="blog-thumbnail placeholder-thumbnail"></div>'
-                                    }
-                                    <span class="blog-name">${article.blog_name}</span>
-                                </div>
-                                <span class="article-date">${article.date}</span>
-                            </div>
-                            <div class="article-main">
-                                <div class="article-content">
-                                    <h2 class="article-title">${article.title}</h2>
-                                    ${article.subtitle ? `<div class="article-subtitle">${article.subtitle}</div>` : ''}
-                                    <div class="article-summary-container">
-                                        <div class="ai-badge">
-                                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                            AI Summary
-                                        </div>
-                                        <p class="article-summary">${article.summary}</p>
-                                    </div>
-                                    <div class="article-meta">
-                                        ${article.metaText}
-                                    </div>
-                                    <a href="${article.link}" class="article-link" target="_blank">Full Article →</a>
-                                </div>
-                                ${article.article_thumbnail ? 
-                                    `<img class="article-thumbnail" src="${article.article_thumbnail}" alt="Article thumbnail">` : 
-                                    '<div class="article-thumbnail placeholder-thumbnail"></div>'
-                                }
-                            </div>
+        function createArticleCard(article, index) {
+            return `
+                <div class="article" id="article-${index}">
+                    <div class="article-header">
+                        <div class="blog-info">
+                            ${article.blog_thumbnail ? 
+                                `<img class="blog-thumbnail" src="${article.blog_thumbnail}" alt="Blog thumbnail">` : 
+                                '<div class="blog-thumbnail placeholder-thumbnail"></div>'
+                            }
+                            <span class="blog-name">${article.blog_name}</span>
                         </div>
-                    `;
+                        <span class="article-date">${article.date}</span>
+                    </div>
+                    <div class="article-main">
+                        <div class="article-content">
+                            <h2 class="article-title">${article.title}</h2>
+                            ${article.subtitle ? `<div class="article-subtitle">${article.subtitle}</div>` : ''}
+                            <div class="article-summary-container">
+                                <div class="summary-placeholder">
+                                    <div class="spinner"></div>
+                                    <div>Generating AI summary...</div>
+                                </div>
+                            </div>
+                            <div class="article-meta">
+                                ${article.metaText}
+                            </div>
+                            <a href="${article.url}" class="article-link" target="_blank">Full Article →</a>
+                        </div>
+                        ${article.article_thumbnail ? 
+                            `<img class="article-thumbnail" src="${article.article_thumbnail}" alt="Article thumbnail">` : 
+                            '<div class="article-thumbnail placeholder-thumbnail"></div>'
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+        async function refreshArticles() {
+            try {
+                // Clear existing articles
+                $('#articles').empty();
+                
+                // Get article metadata
+                const response = await $.get('/refresh');
+                const articles = response.articles;
+                
+                if (articles.length === 0) {
+                    return;
+                }
+                
+                // Immediately display all articles with loading spinners
+                articles.forEach((article, index) => {
+                    const articleHtml = createArticleCard(article, index);
                     $('#articles').append(articleHtml);
                 });
-            });
+                
+                // Generate summaries one by one
+                for (const [index, article] of articles.entries()) {
+                    try {
+                        const summary = await $.ajax({
+                            url: '/summarize',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ article })
+                        });
+                        
+                        // Replace spinner with summary
+                        $(`#article-${index} .article-summary-container`).html(`
+                            <div class="ai-badge">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                AI Summary
+                            </div>
+                            <p class="article-summary">${summary.summary}</p>
+                        `);
+                        
+                    } catch (error) {
+                        console.error('Error processing article:', error);
+                        $(`#article-${index} .article-summary-container`).html(`
+                            <div class="summary-placeholder" style="color: #dc3545;">
+                                Failed to generate summary
+                            </div>
+                        `);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing articles:', error);
+            }
         }
 
         $(document).ready(function() {
