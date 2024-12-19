@@ -189,13 +189,18 @@ async def get_inbox_articles():
                                     const dateElement = container.querySelector('.inbox-item-timestamp');
                                     const date = dateElement ? dateElement.innerText.trim() : null;
                                     
+                                    // Get metaText (author and duration)
+                                    const metaElement = container.querySelector('.reader2-item-meta');
+                                    const metaText = metaElement ? metaElement.innerText.trim() : 'Unknown Author / Duration';
+                                                                        
                                     return { 
                                         blogName, 
                                         blogThumbnail,
                                         title,
                                         subtitle,
                                         articleThumbnail,
-                                        date 
+                                        date,
+                                        metaText: metaText
                                     };
                                 }''', link)
                                 
@@ -204,11 +209,12 @@ async def get_inbox_articles():
                                     article_thumbnail = container_info['articleThumbnail']
                                     title = container_info['title']
                                     subtitle = container_info['subtitle']
+                                    metaText = container_info['metaText']
                                     if blog_thumbnail:
                                         print(f"Found blog thumbnail: {blog_thumbnail}")
                                     if article_thumbnail:
                                         print(f"Found article thumbnail: {article_thumbnail}")
-                                
+                            
                             except Exception as e:
                                 print(f"Error finding article info: {str(e)}")
                             
@@ -220,7 +226,8 @@ async def get_inbox_articles():
                                     'article_thumbnail': article_thumbnail,
                                     'blog_thumbnail': blog_thumbnail,
                                     'blog_name': container_info['blogName'] if container_info else 'Unknown Blog',
-                                    'date': container_info['date'] if container_info else ''
+                                    'date': container_info['date'] if container_info else '',
+                                    'metaText': metaText
                                 })
                         except Exception as e:
                             print(f"Error collecting article info: {str(e)}")
@@ -233,6 +240,7 @@ async def get_inbox_articles():
                 url = article_info['url']
                 title = article_info['title']
                 subtitle = article_info['subtitle']
+                metaText = article_info['metaText']
                 print(f"\nProcessing article: {title}")
                 
                 # Generate unique ID for the article
@@ -251,7 +259,8 @@ async def get_inbox_articles():
                                 'article_thumbnail': article_info.get('article_thumbnail'),
                                 'blog_thumbnail': article_info.get('blog_thumbnail'),
                                 'blog_name': article_info.get('blog_name'),
-                                'date': article_info.get('date')
+                                'date': article_info.get('date'),
+                                'metaText': article_info.get('metaText'),
                             }
                             print(f"Generated new summary for: {title}")
                         else:

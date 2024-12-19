@@ -134,6 +134,12 @@
             line-height: 1.5;
         }
 
+        .article-meta {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+
         .article-link {
             display: inline-block;
             margin-top: 12px;
@@ -195,6 +201,9 @@
                                     <h2 class="article-title">${article.title}</h2>
                                     ${article.subtitle ? `<div class="article-subtitle">${article.subtitle}</div>` : ''}
                                     <p class="article-summary">${article.summary}</p>
+                                    <div class="article-meta">
+                                        ${article.metaText}
+                                    </div>
                                     <a href="${article.link}" class="article-link" target="_blank">Full Article →</a>
                                 </div>
                                 <div class="article-thumbnail">
