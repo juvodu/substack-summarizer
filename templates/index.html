@@ -1,200 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Substack Summarizer</title>
+    <title>Substack AI Summarizer</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f8f8f8;
-        }
-
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        #refresh-button {
-            display: block;
-            margin: 20px auto;
-            padding: 10px 20px;
-            font-size: 16px;
-            color: white;
-            background-color: #FF6719;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        #refresh-button:hover {
-            background-color: #e65c17;
-        }
-
-        #articles {
-            margin-top: 30px;
-        }
-
-        .article {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-
-        .article:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-
-        .article-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .blog-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .blog-thumbnail {
-            width: 24px;
-            height: 24px;
-            overflow: hidden;
-        }
-
-        .blog-thumbnail img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .article-blog-name {
-            color: #FF6719;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .article-date {
-            color: #999;
-            font-size: 14px;
-        }
-
-        .article-main {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-
-        .article-thumbnail {
-            flex: 0 0 200px;
-            height: 134px;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .article-thumbnail img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .article-content {
-            flex: 1;
-        }
-
-        .article-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #333;
-            margin: 0 0 8px 0;
-        }
-
-        .article-subtitle {
-            font-size: 18px;
-            color: #666;
-            margin: 0 0 15px 0;
-            line-height: 1.4;
-        }
-
-        .article-summary-container {
-            margin: 15px 0;
-        }
-
-        .article-summary {
-            color: #666;
-            font-size: 16px;
-            margin: 0;
-            line-height: 1.5;
-        }
-
-        .ai-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            background-color: #f0f7ff;
-            color: #0066cc;
-            font-size: 12px;
-            font-weight: 500;
-            padding: 4px 8px;
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-
-        .ai-badge svg {
-            width: 14px;
-            height: 14px;
-        }
-
-        .article-meta {
-            font-size: 14px;
-            color: #666;
-            margin-top: 10px;
-        }
-
-        .article-link {
-            display: inline-block;
-            margin-top: 12px;
-            color: #FF6719;
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .article-link:hover {
-            text-decoration: underline;
-        }
-
-        .loading {
-            text-align: center;
-            color: #666;
-            padding: 20px;
-            display: none;
-        }
-
-        .placeholder-thumbnail {
-            background-color: #eee;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #999;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <h1>Substack Summarizer</h1>
+    <h1>Substack AI Summarizer</h1>
     <button id="refresh-button">Refresh Articles</button>
     <div id="loading" class="loading">Loading articles...</div>
     <div id="articles"></div>
@@ -211,12 +23,13 @@
                         <div class="article">
                             <div class="article-header">
                                 <div class="blog-info">
-                                    <div class="blog-thumbnail">
-                                        <img src="${article.blog_thumbnail || 'https://placeholder.com/24x24'}" alt="Blog thumbnail">
-                                    </div>
-                                    <div class="article-blog-name">${article.blog_name}</div>
+                                    ${article.blog_thumbnail ? 
+                                        `<img class="blog-thumbnail" src="${article.blog_thumbnail}" alt="Blog thumbnail">` : 
+                                        '<div class="blog-thumbnail placeholder-thumbnail"></div>'
+                                    }
+                                    <span class="blog-name">${article.blog_name}</span>
                                 </div>
-                                <div class="article-date">${article.date}</div>
+                                <span class="article-date">${article.date}</span>
                             </div>
                             <div class="article-main">
                                 <div class="article-content">
@@ -238,19 +51,22 @@
                                     </div>
                                     <a href="${article.link}" class="article-link" target="_blank">Full Article →</a>
                                 </div>
-                                <div class="article-thumbnail">
-                                    <img src="${article.article_thumbnail || 'https://placeholder.com/200x134'}" alt="Article thumbnail">
-                                </div>
+                                ${article.article_thumbnail ? 
+                                    `<img class="article-thumbnail" src="${article.article_thumbnail}" alt="Article thumbnail">` : 
+                                    '<div class="article-thumbnail placeholder-thumbnail"></div>'
+                                }
                             </div>
                         </div>
                     `;
-                    
                     $('#articles').append(articleHtml);
                 });
             });
         }
 
-        $('#refresh-button').click(refreshArticles);
+        $(document).ready(function() {
+            $('#refresh-button').click(refreshArticles);
+            refreshArticles();
+        });
     </script>
 </body>
 </html>
