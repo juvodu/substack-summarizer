@@ -8,34 +8,36 @@
 </head>
 <body>
     <h1>Substack AI Summarizer</h1>
-    <details class="config-section">
-        <summary>Advanced Configuration</summary>
-        <div class="settings-container">
-            <div class="setting">
-                <label>AI Summary length:</label>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="summary-length" value="1">
-                        Brief (1-2 sentences)
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="summary-length" value="2" checked>
-                        Moderate (3-4 sentences)
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="summary-length" value="3">
-                        Detailed (5-6 sentences)
-                    </label>
+    <div class="control-panel">
+        <details class="config-section">
+            <summary>Advanced Configuration</summary>
+            <div class="settings-container">
+                <div class="setting">
+                    <label>AI Summary length:</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="summary-length" value="1">
+                            Brief (1-2 sentences)
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="summary-length" value="2" checked>
+                            Moderate (3-4 sentences)
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="summary-length" value="3">
+                            Detailed (5-6 sentences)
+                        </label>
+                    </div>
+                </div>
+                <div class="setting">
+                    <label for="article-limit">Number of articles to fetch from Substack Inbox: <span id="article-limit-value">5</span></label>
+                    <input type="range" id="article-limit" min="1" max="20" step="1" value="5">
                 </div>
             </div>
-            <div class="setting">
-                <label for="article-limit">Number of articles to fetch from Substack Inbox: <span id="article-limit-value">5</span></label>
-                <input type="range" id="article-limit" min="1" max="20" step="1" value="5">
-            </div>
+        </details>
+        <div id="refresh-button-container">
+            <button id="refresh-button">Refresh Articles</button>
         </div>
-    </details>
-    <div id="refresh-button-container">
-        <button id="refresh-button">Refresh Articles</button>
     </div>
 
     <div class="progress-container" id="progress-container">
