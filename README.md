@@ -28,3 +28,7 @@ python3 app.py
 
 ## Constraints
 At thos point (December 2024) Substack does not expose a public API. Substack exposes a RSS /feed endpoint for each blog. However there is no RSS feed for the inbox, which is the use case this app covers. 
+
+## Respect the Authors
+- For private use only (not for commercial use)
+- Data sent to OpenAI's API is not used for model training as stated in the [privacy policy](https://platform.openai.com/docs/concepts/privacy).
