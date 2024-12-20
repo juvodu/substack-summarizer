@@ -139,6 +139,9 @@ def index():
 async def refresh():
     """Fetch article metadata from Substack inbox"""
     try:
+        # Get the article limit from query parameters, default to 5
+        article_limit = int(request.args.get('limit', 5))
+        
         async with async_playwright() as p:
             print("Launching browser...")
             browser = await p.chromium.launch(
@@ -175,7 +178,7 @@ async def refresh():
                     print(f"Found {len(links)} links with {selector}")
                     if links:
                         # Collect all article info first
-                        for link in links[:3]:  # Only process top 3 for now
+                        for link in links[:article_limit]:  # Only process up to the limit
                             try:
                                 url = await link.get_attribute('href')
                                 

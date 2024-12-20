@@ -8,6 +8,12 @@
 </head>
 <body>
     <h1>Substack AI Summarizer</h1>
+    <div class="settings-container">
+        <div class="setting">
+            <label for="article-limit">Number of articles to fetch: <span id="article-limit-value">5</span></label>
+            <input type="range" id="article-limit" min="1" max="20" step="1" value="5">
+        </div>
+    </div>
     <div id="refresh-button-container">
         <button id="refresh-button">Refresh Articles</button>
     </div>
@@ -126,14 +132,106 @@
             }
         }
 
+        // Settings management
+        const SETTINGS_KEY = 'substack_settings';
+        
+        function saveSettings() {
+            const settings = {
+                articleLimit: parseInt($('#article-limit').val())
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        }
+        
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+            if (settings.articleLimit) {
+                $('#article-limit').val(settings.articleLimit);
+                $('#article-limit-value').text(settings.articleLimit);
+            }
+        }
+
+        // Update article limit display when slider moves
+        $('#article-limit').on('input', function() {
+            $('#article-limit-value').text($(this).val());
+            saveSettings();
+        });
+
+        // Utility function to delay execution
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // Function to retry failed requests
+        async function retryRequest(fn, retries = 3, delayMs = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await delay(delayMs * (i + 1)); // Exponential backoff
+                }
+            }
+        }
+
+        async function generateSummary(article, articleElement) {
+            try {
+                const summary = await retryRequest(async () => {
+                    return await $.ajax({
+                        url: '/summarize',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ article })
+                    });
+                });
+                
+                // Update cache with new summary
+                const cachedSummaries = getCachedSummaries();
+                cachedSummaries[article.url] = summary.summary;
+                saveToCache(CACHE_KEY_SUMMARIES, cachedSummaries);
+                
+                // Update UI with new summary
+                articleElement.find('.article-summary-container').html(`
+                    <div class="ai-badge">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        AI Summary
+                    </div>
+                    <p class="article-summary">${summary.summary}</p>
+                `);
+            } catch (error) {
+                console.error('Error processing article:', error);
+                articleElement.find('.article-summary-container').html(`
+                    <div class="summary-placeholder" style="color: #dc3545;">
+                        Failed to generate summary. <a href="#" class="retry-summary">Retry</a>
+                    </div>
+                `);
+                
+                // Add retry handler
+                articleElement.find('.retry-summary').click(async (e) => {
+                    e.preventDefault();
+                    articleElement.find('.article-summary-container').html(`
+                        <div class="summary-placeholder">
+                            <div class="spinner"></div>
+                            <div>Generating AI summary...</div>
+                        </div>
+                    `);
+                    await generateSummary(article, articleElement);
+                });
+            }
+        }
+
         async function refreshArticles() {
             try {
                 // Show progress bar but keep existing articles
                 $('#progress-container').show();
                 $('#refresh-button').prop('disabled', true);
                 
-                // Get article metadata
-                const response = await $.get('/refresh');
+                // Get article metadata with limit
+                const articleLimit = parseInt($('#article-limit').val());
+                const response = await $.get('/refresh', { limit: articleLimit });
                 const newArticles = response.articles;
                 
                 // Hide progress bar
@@ -156,7 +254,7 @@
                 // Find truly new articles (not in cache)
                 const genuinelyNewArticles = newArticles.filter(article => !existingArticles[article.url]);
                 
-                // Prepend new articles at the top of the list
+                // Prepend new articles at the top of the list (newest first)
                 genuinelyNewArticles.reverse().forEach((article) => {
                     updatedArticles[article.url] = article;
                     const articleHtml = createArticleCard(article, Object.keys(updatedArticles).length - 1);
@@ -166,46 +264,12 @@
                 // Save updated articles to cache
                 saveToCache(CACHE_KEY_ARTICLES, updatedArticles);
                 
-                // Generate summaries only for new articles
-                for (const article of genuinelyNewArticles) {
+                // Generate summaries from newest to oldest (process the array in reverse order of display)
+                for (const article of [...genuinelyNewArticles].reverse()) {
                     const articleElement = $(`div[data-url="${article.url}"]`);
-                    const index = articleElement.index();
-
-                    try {
-                        const summary = await $.ajax({
-                            url: '/summarize',
-                            method: 'POST',
-                            contentType: 'application/json',
-                            data: JSON.stringify({ article })
-                        });
-                        
-                        // Update cache with new summary
-                        cachedSummaries[article.url] = summary.summary;
-                        saveToCache(CACHE_KEY_SUMMARIES, cachedSummaries);
-                        
-                        // Update UI with new summary
-                        articleElement.find('.article-summary-container').html(`
-                            <div class="ai-badge">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                                AI Summary
-                            </div>
-                            <p class="article-summary">${summary.summary}</p>
-                        `);
-                        
-                    } catch (error) {
-                        console.error('Error processing article:', error);
-                        articleElement.find('.article-summary-container').html(`
-                            <div class="summary-placeholder" style="color: #dc3545;">
-                                Failed to generate summary
-                            </div>
-                        `);
-                    }
+                    await generateSummary(article, articleElement);
+                    await delay(1000); // Wait 1 second between summary requests
                 }
-                
             } catch (error) {
                 console.error('Error refreshing articles:', error);
                 // Hide progress bar and show error notification
@@ -218,6 +282,8 @@
         }
 
         $(document).ready(function() {
+            // Load saved settings
+            loadSettings();
             // Display cached articles on page load
             displayCachedArticles();
             // Set up refresh button handler
