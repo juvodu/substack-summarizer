@@ -16,16 +16,74 @@
         <div class="progress-bar">
             <div class="progress-bar-fill"></div>
         </div>
-        <div class="progress-text">Loading articles from Substack...</div>
+        <div class="progress-text">Loading articles from your Substack Inbox...</div>
     </div>
 
     <div id="loading" class="loading">Loading articles...</div>
     <div id="articles"></div>
 
     <script>
+        // Cache management
+        const CACHE_KEY_ARTICLES = 'substack_articles';
+        const CACHE_KEY_SUMMARIES = 'substack_summaries';
+        const CACHE_EXPIRY_HOURS = 24; // Cache expires after 24 hours
+
+        function saveToCache(key, data) {
+            const cacheData = {
+                timestamp: new Date().getTime(),
+                data: data
+            };
+            localStorage.setItem(key, JSON.stringify(cacheData));
+        }
+
+        function getFromCache(key) {
+            const cached = localStorage.getItem(key);
+            if (!cached) return null;
+
+            const cacheData = JSON.parse(cached);
+            const now = new Date().getTime();
+            const expiryTime = CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+
+            // Check if cache has expired
+            if (now - cacheData.timestamp > expiryTime) {
+                localStorage.removeItem(key);
+                return null;
+            }
+
+            return cacheData.data;
+        }
+
+        function getCachedArticles() {
+            return getFromCache(CACHE_KEY_ARTICLES) || {};
+        }
+
+        function getCachedSummaries() {
+            return getFromCache(CACHE_KEY_SUMMARIES) || {};
+        }
+
         function createArticleCard(article, index) {
+            const cachedSummaries = getCachedSummaries();
+            const hasCachedSummary = cachedSummaries[article.url];
+            
+            const summaryHtml = hasCachedSummary ? `
+                <div class="ai-badge">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    AI Summary
+                </div>
+                <p class="article-summary">${cachedSummaries[article.url]}</p>
+            ` : `
+                <div class="summary-placeholder">
+                    <div class="spinner"></div>
+                    <div>Generating AI summary...</div>
+                </div>
+            `;
+
             return `
-                <div class="article" id="article-${index}">
+                <div class="article" id="article-${index}" data-url="${article.url}">
                     <div class="article-header">
                         <div class="blog-info">
                             ${article.blog_thumbnail ? 
@@ -41,10 +99,7 @@
                             <h2 class="article-title">${article.title}</h2>
                             ${article.subtitle ? `<div class="article-subtitle">${article.subtitle}</div>` : ''}
                             <div class="article-summary-container">
-                                <div class="summary-placeholder">
-                                    <div class="spinner"></div>
-                                    <div>Generating AI summary...</div>
-                                </div>
+                                ${summaryHtml}
                             </div>
                             <div class="article-meta">
                                 ${article.metaText}
@@ -60,36 +115,62 @@
             `;
         }
 
+        async function displayCachedArticles() {
+            const cachedArticles = getCachedArticles();
+            if (Object.keys(cachedArticles).length > 0) {
+                const articles = Object.values(cachedArticles);
+                articles.forEach((article, index) => {
+                    const articleHtml = createArticleCard(article, index);
+                    $('#articles').append(articleHtml);
+                });
+            }
+        }
+
         async function refreshArticles() {
             try {
-                // Show progress bar
+                // Show progress bar but keep existing articles
                 $('#progress-container').show();
                 $('#refresh-button').prop('disabled', true);
                 
-                // Clear existing articles
-                $('#articles').empty();
-                
                 // Get article metadata
                 const response = await $.get('/refresh');
-                const articles = response.articles;
+                const newArticles = response.articles;
                 
                 // Hide progress bar
                 $('#progress-container').hide();
                 $('#refresh-button').prop('disabled', false);
                 
-                if (articles.length === 0) {
-                    $('#articles').html('<div class="error-message">No articles found. Please try again.</div>');
+                if (newArticles.length === 0) {
+                    // Don't clear existing articles, just show a notification
+                    const notification = $('<div class="error-message" style="margin: 20px auto;">No new articles found.</div>');
+                    notification.insertAfter('#refresh-button-container');
+                    setTimeout(() => notification.fadeOut('slow', function() { $(this).remove(); }), 3000);
                     return;
                 }
+
+                // Update cache with new articles
+                const existingArticles = getCachedArticles();
+                const updatedArticles = { ...existingArticles };
+                const cachedSummaries = getCachedSummaries();
                 
-                // Immediately display all articles with loading spinners
-                articles.forEach((article, index) => {
-                    const articleHtml = createArticleCard(article, index);
-                    $('#articles').append(articleHtml);
+                // Find truly new articles (not in cache)
+                const genuinelyNewArticles = newArticles.filter(article => !existingArticles[article.url]);
+                
+                // Prepend new articles at the top of the list
+                genuinelyNewArticles.reverse().forEach((article) => {
+                    updatedArticles[article.url] = article;
+                    const articleHtml = createArticleCard(article, Object.keys(updatedArticles).length - 1);
+                    $('#articles').prepend(articleHtml);
                 });
                 
-                // Generate summaries one by one
-                for (const [index, article] of articles.entries()) {
+                // Save updated articles to cache
+                saveToCache(CACHE_KEY_ARTICLES, updatedArticles);
+                
+                // Generate summaries only for new articles
+                for (const article of genuinelyNewArticles) {
+                    const articleElement = $(`div[data-url="${article.url}"]`);
+                    const index = articleElement.index();
+
                     try {
                         const summary = await $.ajax({
                             url: '/summarize',
@@ -98,8 +179,12 @@
                             data: JSON.stringify({ article })
                         });
                         
-                        // Replace spinner with summary
-                        $(`#article-${index} .article-summary-container`).html(`
+                        // Update cache with new summary
+                        cachedSummaries[article.url] = summary.summary;
+                        saveToCache(CACHE_KEY_SUMMARIES, cachedSummaries);
+                        
+                        // Update UI with new summary
+                        articleElement.find('.article-summary-container').html(`
                             <div class="ai-badge">
                                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -113,7 +198,7 @@
                         
                     } catch (error) {
                         console.error('Error processing article:', error);
-                        $(`#article-${index} .article-summary-container`).html(`
+                        articleElement.find('.article-summary-container').html(`
                             <div class="summary-placeholder" style="color: #dc3545;">
                                 Failed to generate summary
                             </div>
@@ -123,15 +208,19 @@
                 
             } catch (error) {
                 console.error('Error refreshing articles:', error);
-                // Hide progress bar and show error
+                // Hide progress bar and show error notification
                 $('#progress-container').hide();
                 $('#refresh-button').prop('disabled', false);
-                $('#articles').html('<div class="error-message">Failed to load articles. Please try again.</div>');
+                const errorNotification = $('<div class="error-message" style="margin: 20px auto;">Failed to load articles. Please try again.</div>');
+                errorNotification.insertAfter('#refresh-button-container');
+                setTimeout(() => errorNotification.fadeOut('slow', function() { $(this).remove(); }), 3000);
             }
         }
 
         $(document).ready(function() {
-            // Only set up the click handler, don't call refreshArticles automatically
+            // Display cached articles on page load
+            displayCachedArticles();
+            // Set up refresh button handler
             $('#refresh-button').click(refreshArticles);
         });
     </script>
