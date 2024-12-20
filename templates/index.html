@@ -10,6 +10,23 @@
     <h1>Substack AI Summarizer</h1>
     <div class="settings-container">
         <div class="setting">
+            <label>AI Summary length:</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="summary-length" value="1">
+                    Brief (1-2 sentences)
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="summary-length" value="2" checked>
+                    Moderate (3-4 sentences)
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="summary-length" value="3">
+                    Detailed (5-6 sentences)
+                </label>
+            </div>
+        </div>
+        <div class="setting">
             <label for="article-limit">Number of articles to fetch from Substack Inbox: <span id="article-limit-value">5</span></label>
             <input type="range" id="article-limit" min="1" max="20" step="1" value="5">
         </div>
@@ -26,7 +43,7 @@
     </div>
 
     <div id="loading" class="loading">Loading articles...</div>
-    <div id="articles"></div>
+    <div id="articles-container"></div>
 
     <script>
         // Cache management
@@ -128,7 +145,7 @@
                 const articles = Object.values(cachedArticles);
                 articles.slice(0, articleLimit).forEach((article, index) => {
                     const articleHtml = createArticleCard(article, index);
-                    $('#articles').append(articleHtml);
+                    $('#articles-container').append(articleHtml);
                 });
             }
         }
@@ -136,9 +153,12 @@
         // Settings management
         const SETTINGS_KEY = 'substack_settings';
         
+        let currentSummaryLength = '2'; // Default to moderate
+
         function saveSettings() {
             const settings = {
-                articleLimit: parseInt($('#article-limit').val())
+                articleLimit: parseInt($('#article-limit').val()),
+                summaryLength: parseInt($('input[name="summary-length"]:checked').val())
             };
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
         }
@@ -149,6 +169,10 @@
                 $('#article-limit').val(settings.articleLimit);
                 $('#article-limit-value').text(settings.articleLimit);
             }
+            if (settings.summaryLength) {
+                $(`input[name="summary-length"][value="${settings.summaryLength}"]`).prop('checked', true);
+                currentSummaryLength = settings.summaryLength;
+            }
         }
 
         // Update article limit display when slider moves
@@ -157,6 +181,11 @@
             $('#article-limit-value').text(newLimit);
             saveSettings();
             // No longer updating the article list here - will update on refresh only
+        });
+
+        // Update settings when radio buttons change
+        $('input[name="summary-length"]').on('change', function() {
+            saveSettings();
         });
 
         // Utility function to delay execution
@@ -183,7 +212,10 @@
                         url: '/summarize',
                         method: 'POST',
                         contentType: 'application/json',
-                        data: JSON.stringify({ article })
+                        data: JSON.stringify({ 
+                            article,
+                            length: parseInt($('input[name="summary-length"]:checked').val())
+                        })
                     });
                 });
                 
@@ -232,64 +264,55 @@
                 $('#progress-container').show();
                 $('#refresh-button').prop('disabled', true);
                 
+                // Check if summary length changed
+                const newSummaryLength = $('input[name="summary-length"]:checked').val();
+                const summaryLengthChanged = newSummaryLength !== currentSummaryLength;
+                if (summaryLengthChanged) {
+                    // Clear summary cache only if length changed
+                    saveToCache(CACHE_KEY_SUMMARIES, {});
+                    currentSummaryLength = newSummaryLength;
+                }
+
                 // Get article metadata with limit
                 const articleLimit = parseInt($('#article-limit').val());
                 const response = await $.get('/refresh', { limit: articleLimit });
-                const newArticles = response.articles;
                 
-                // Hide progress bar
-                $('#progress-container').hide();
-                $('#refresh-button').prop('disabled', false);
-                
-                if (newArticles.length === 0) {
-                    // Don't clear existing articles, just show a notification
+                if (response.articles && response.articles.length > 0) {
+                    // Update article cache
+                    const cachedArticles = getCachedArticles();
+                    response.articles.forEach(article => {
+                        cachedArticles[article.url] = article;
+                    });
+                    saveToCache(CACHE_KEY_ARTICLES, cachedArticles);
+                    
+                    // Clear the articles container
+                    $('#articles-container').empty();
+                    
+                    // Display articles and generate summaries
+                    response.articles.forEach((article, index) => {
+                        const articleElement = $(createArticleCard(article, index));
+                        $('#articles-container').append(articleElement);
+                        
+                        // Always generate summary if length changed, otherwise use cache
+                        if (summaryLengthChanged || !getCachedSummaries()[article.url]) {
+                            generateSummary(article, articleElement);
+                        }
+                    });
+                } else {
+                    // Show "no articles" message
                     const notification = $('<div class="error-message" style="margin: 20px auto;">No new articles found.</div>');
                     notification.insertAfter('#refresh-button-container');
                     setTimeout(() => notification.fadeOut('slow', function() { $(this).remove(); }), 3000);
-                    return;
-                }
-
-                // Update cache with new articles
-                const existingArticles = getCachedArticles();
-                const updatedArticles = { ...existingArticles };
-                const cachedSummaries = getCachedSummaries();
-                
-                // Find truly new articles (not in cache)
-                const genuinelyNewArticles = newArticles.filter(article => !existingArticles[article.url]);
-                
-                // Add new articles to cache
-                genuinelyNewArticles.forEach(article => {
-                    updatedArticles[article.url] = article;
-                });
-                
-                // Save updated articles to cache
-                saveToCache(CACHE_KEY_ARTICLES, updatedArticles);
-
-                // Clear and display articles up to the limit
-                $('#articles').empty();
-                const allArticles = Object.values(updatedArticles);
-                allArticles.slice(0, articleLimit).forEach((article, index) => {
-                    const articleHtml = createArticleCard(article, index);
-                    $('#articles').append(articleHtml);
-                });
-                
-                // Generate summaries only for new articles that are currently displayed
-                const displayedUrls = new Set(allArticles.slice(0, articleLimit).map(a => a.url));
-                for (const article of genuinelyNewArticles) {
-                    if (displayedUrls.has(article.url)) {
-                        const articleElement = $(`div[data-url="${article.url}"]`);
-                        await generateSummary(article, articleElement);
-                        await delay(1000); // Wait 1 second between summary requests
-                    }
                 }
             } catch (error) {
                 console.error('Error refreshing articles:', error);
-                // Hide progress bar and show error notification
+                const errorMessage = $('<div class="error-message" style="margin: 20px auto;">Error refreshing articles. Please try again.</div>');
+                errorMessage.insertAfter('#refresh-button-container');
+                setTimeout(() => errorMessage.fadeOut('slow', function() { $(this).remove(); }), 3000);
+            } finally {
+                // Always hide progress and re-enable button
                 $('#progress-container').hide();
                 $('#refresh-button').prop('disabled', false);
-                const errorNotification = $('<div class="error-message" style="margin: 20px auto;">Failed to load articles. Please try again.</div>');
-                errorNotification.insertAfter('#refresh-button-container');
-                setTimeout(() => errorNotification.fadeOut('slow', function() { $(this).remove(); }), 3000);
             }
         }
 

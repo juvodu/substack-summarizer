@@ -114,16 +114,25 @@ async def login_if_needed(page):
         print(f"Error in login_if_needed: {str(e)}")
         raise e
 
-def generate_summary(content):
+def generate_summary(content, length=2):  
     """Generate a summary using OpenAI's API"""
     try:
+        # Define summary length parameters
+        length_settings = {
+            1: {"sentences": "1-2", "tokens": 100},  
+            2: {"sentences": "3-4", "tokens": 150},  
+            3: {"sentences": "5-6", "tokens": 200}   
+        }
+        
+        setting = length_settings.get(int(length), length_settings[2])  
+        
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that creates concise summaries of articles."},
-                {"role": "user", "content": f"Please provide a 2-3 sentence summary of this article:\n\n{content}"}
+                {"role": "user", "content": f"Please provide a {setting['sentences']} sentence summary of this article:\n\n{content}"}
             ],
-            max_tokens=150
+            max_tokens=setting['tokens']
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -145,8 +154,8 @@ async def refresh():
         async with async_playwright() as p:
             print("Launching browser...")
             browser = await p.chromium.launch(
-                headless=False,  # Set to False to see what's happening
-                slow_mo=50  # Slow down operations to see what's happening
+                headless=False,  
+                slow_mo=50  
             )
             context = await browser.new_context()
             page = await context.new_page()
@@ -157,17 +166,17 @@ async def refresh():
                 
                 print("Navigating to inbox...")
                 await page.goto('https://substack.com/inbox')
-                await asyncio.sleep(2)  # Give the page a moment to load
+                await asyncio.sleep(2)  
                 
                 print("Looking for article links...")
                 # Try different selectors in order of specificity
                 selectors_to_try = [
-                    'a[href*="/p/"]',  # Standard article links
-                    '.post-preview a',  # Post preview links
-                    'article a',        # Any link within article tags
-                    '.post-title a',    # Post title links
-                    '.post a',          # Any link within post class
-                    'a[href*="substack.com"]'  # Any Substack link
+                    'a[href*="/p/"]',  
+                    '.post-preview a',  
+                    'article a',        
+                    '.post-title a',    
+                    '.post a',          
+                    'a[href*="substack.com"]'  
                 ]
                 
                 # First collect all article information before processing
@@ -178,7 +187,7 @@ async def refresh():
                     print(f"Found {len(links)} links with {selector}")
                     if links:
                         # Collect all article info first
-                        for link in links[:article_limit]:  # Only process up to the limit
+                        for link in links[:article_limit]:  
                             try:
                                 url = await link.get_attribute('href')
                                 
@@ -248,7 +257,7 @@ async def refresh():
                                 continue
                         
                         if article_infos:
-                            break  # Use the first successful selector that found articles
+                            break  
                 
                 print(f"Found {len(article_infos)} articles")
                 
@@ -257,7 +266,7 @@ async def refresh():
                     print("No articles found, taking screenshot...")
                     await page.screenshot(path='debug_screenshot.png')
                     print("Screenshot saved as debug_screenshot.png")
-                    await asyncio.sleep(60)  # Keep browser open for debugging
+                    await asyncio.sleep(60)  
                 
                 return jsonify({
                     'articles': article_infos
@@ -269,7 +278,7 @@ async def refresh():
                 print("Error screenshot saved as error_screenshot.png")
                 raise e
             finally:
-                await asyncio.sleep(2)  # Give time to see what happened
+                await asyncio.sleep(2)  
                 await browser.close()
 
     except Exception as e:
@@ -283,6 +292,7 @@ async def summarize():
     try:
         data = request.json
         article = data['article']
+        length = int(data.get('length', 2))  
         
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -292,7 +302,7 @@ async def summarize():
             try:
                 content = await get_article_content(page, article['url'])
                 if not content.startswith("Error"):
-                    summary = generate_summary(content)
+                    summary = generate_summary(content, length)
                     if summary:
                         return jsonify({'summary': summary})
                     else:
