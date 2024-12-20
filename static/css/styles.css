@@ -287,14 +287,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .control-panel {
     max-width: 800px;
     margin: 20px auto;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     padding: 20px;
 }
 
 .config-section {
-    margin-bottom: 20px;
+    width: 70%;
+    margin: 0 auto 20px;
     background: #fff;
     border-radius: 8px;
     overflow: hidden;
@@ -309,15 +307,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .config-section summary {
     padding: 15px 20px;
     cursor: pointer;
-    background: #f5f5f5;
     color: #666;
-    border-bottom: 1px solid #ddd;
     outline: none;
     transition: background-color 0.2s;
-}
-
-.config-section summary:hover {
-    background: #eee;
 }
 
 .config-section[open] summary {
