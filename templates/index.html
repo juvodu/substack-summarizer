@@ -254,18 +254,18 @@
                 // Find truly new articles (not in cache)
                 const genuinelyNewArticles = newArticles.filter(article => !existingArticles[article.url]);
                 
-                // Prepend new articles at the top of the list (newest first)
-                genuinelyNewArticles.reverse().forEach((article) => {
+                // Add new articles to the list (maintaining scraped order)
+                genuinelyNewArticles.forEach((article) => {
                     updatedArticles[article.url] = article;
                     const articleHtml = createArticleCard(article, Object.keys(updatedArticles).length - 1);
-                    $('#articles').prepend(articleHtml);
+                    $('#articles').append(articleHtml); // Append to bottom instead of prepend
                 });
                 
                 // Save updated articles to cache
                 saveToCache(CACHE_KEY_ARTICLES, updatedArticles);
                 
-                // Generate summaries from newest to oldest (process the array in reverse order of display)
-                for (const article of [...genuinelyNewArticles].reverse()) {
+                // Generate summaries for new articles in the order they appear
+                for (const article of genuinelyNewArticles) {
                     const articleElement = $(`div[data-url="${article.url}"]`);
                     await generateSummary(article, articleElement);
                     await delay(1000); // Wait 1 second between summary requests
