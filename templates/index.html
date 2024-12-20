@@ -10,7 +10,7 @@
     <h1>Substack AI Summarizer</h1>
     <div class="settings-container">
         <div class="setting">
-            <label for="article-limit">Number of articles to fetch: <span id="article-limit-value">5</span></label>
+            <label for="article-limit">Number of articles to fetch from Substack Inbox: <span id="article-limit-value">5</span></label>
             <input type="range" id="article-limit" min="1" max="20" step="1" value="5">
         </div>
     </div>
@@ -124,8 +124,9 @@
         async function displayCachedArticles() {
             const cachedArticles = getCachedArticles();
             if (Object.keys(cachedArticles).length > 0) {
+                const articleLimit = parseInt($('#article-limit').val());
                 const articles = Object.values(cachedArticles);
-                articles.forEach((article, index) => {
+                articles.slice(0, articleLimit).forEach((article, index) => {
                     const articleHtml = createArticleCard(article, index);
                     $('#articles').append(articleHtml);
                 });
@@ -152,8 +153,10 @@
 
         // Update article limit display when slider moves
         $('#article-limit').on('input', function() {
-            $('#article-limit-value').text($(this).val());
+            const newLimit = parseInt($(this).val());
+            $('#article-limit-value').text(newLimit);
             saveSettings();
+            // No longer updating the article list here - will update on refresh only
         });
 
         // Utility function to delay execution
@@ -254,21 +257,30 @@
                 // Find truly new articles (not in cache)
                 const genuinelyNewArticles = newArticles.filter(article => !existingArticles[article.url]);
                 
-                // Add new articles to the list (maintaining scraped order)
-                genuinelyNewArticles.forEach((article) => {
+                // Add new articles to cache
+                genuinelyNewArticles.forEach(article => {
                     updatedArticles[article.url] = article;
-                    const articleHtml = createArticleCard(article, Object.keys(updatedArticles).length - 1);
-                    $('#articles').append(articleHtml); // Append to bottom instead of prepend
                 });
                 
                 // Save updated articles to cache
                 saveToCache(CACHE_KEY_ARTICLES, updatedArticles);
+
+                // Clear and display articles up to the limit
+                $('#articles').empty();
+                const allArticles = Object.values(updatedArticles);
+                allArticles.slice(0, articleLimit).forEach((article, index) => {
+                    const articleHtml = createArticleCard(article, index);
+                    $('#articles').append(articleHtml);
+                });
                 
-                // Generate summaries for new articles in the order they appear
+                // Generate summaries only for new articles that are currently displayed
+                const displayedUrls = new Set(allArticles.slice(0, articleLimit).map(a => a.url));
                 for (const article of genuinelyNewArticles) {
-                    const articleElement = $(`div[data-url="${article.url}"]`);
-                    await generateSummary(article, articleElement);
-                    await delay(1000); // Wait 1 second between summary requests
+                    if (displayedUrls.has(article.url)) {
+                        const articleElement = $(`div[data-url="${article.url}"]`);
+                        await generateSummary(article, articleElement);
+                        await delay(1000); // Wait 1 second between summary requests
+                    }
                 }
             } catch (error) {
                 console.error('Error refreshing articles:', error);
