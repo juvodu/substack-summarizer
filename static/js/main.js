@@ -53,7 +53,9 @@ function getCachedSummaries() {
 
 function createArticleCard(article, index) {
     const cachedSummaries = getCachedSummaries();
-    const hasCachedSummary = cachedSummaries && cachedSummaries[article.url];
+    const currentLength = parseInt($('input[name="summary-length"]:checked').val());
+    const cachedSummary = cachedSummaries[article.url];
+    const hasCachedSummary = cachedSummary && cachedSummary.length === currentLength;
     
     const summaryHtml = hasCachedSummary ? `
         <div class="ai-badge">
@@ -64,7 +66,7 @@ function createArticleCard(article, index) {
             </svg>
             AI Summary
         </div>
-        <p class="article-summary">${cachedSummaries[article.url]}</p>
+        <p class="article-summary">${cachedSummary.text}</p>
     ` : `
         <div class="summary-placeholder">
             <div class="spinner"></div>
@@ -124,17 +126,37 @@ async function displayCachedArticles() {
             
             // If we have a cached summary, update the UI immediately
             if (cachedSummaries && cachedSummaries[article.url]) {
+                const currentLength = parseInt($('input[name="summary-length"]:checked').val());
+                const cachedSummary = cachedSummaries[article.url];
+                if (cachedSummary.length === currentLength) {
+                    articleElement.find('.article-summary-container').html(`
+                        <div class="ai-badge">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            AI Summary
+                        </div>
+                        <p class="article-summary">${cachedSummary.text}</p>
+                    `);
+                } else {
+                    articleElement.find('.article-summary-container').html(`
+                        <div class="summary-placeholder">
+                            <div class="spinner"></div>
+                            <div>Generating AI summary...</div>
+                        </div>
+                    `);
+                    generateSummary(article, articleElement);
+                }
+            } else {
                 articleElement.find('.article-summary-container').html(`
-                    <div class="ai-badge">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        AI Summary
+                    <div class="summary-placeholder">
+                        <div class="spinner"></div>
+                        <div>Generating AI summary...</div>
                     </div>
-                    <p class="article-summary">${cachedSummaries[article.url]}</p>
                 `);
+                generateSummary(article, articleElement);
             }
         });
     }
@@ -173,8 +195,27 @@ async function retryRequest(fn, retries = 3, delayMs = 1000) {
 
 async function generateSummary(article, articleElement) {
     try {
-        const summaryLength = $('input[name="summary-length"]:checked').val();
+        const summaryLength = parseInt($('input[name="summary-length"]:checked').val());
         
+        // Check if we have a cached summary with the same length
+        const cachedSummaries = getCachedSummaries();
+        const cachedSummary = cachedSummaries[article.url];
+        if (cachedSummary && cachedSummary.length === summaryLength) {
+            // Use cached summary if length matches
+            articleElement.find('.article-summary-container').html(`
+                <div class="ai-badge">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    AI Summary
+                </div>
+                <p class="article-summary">${cachedSummary.text}</p>
+            `);
+            return;
+        }
+
         const response = await retryRequest(() =>
             fetch('/generate_summary', {
                 method: 'POST',
@@ -183,7 +224,7 @@ async function generateSummary(article, articleElement) {
                 },
                 body: JSON.stringify({
                     url: article.url,
-                    length: parseInt(summaryLength)
+                    length: summaryLength
                 })
             })
         );
@@ -211,10 +252,13 @@ async function generateSummary(article, articleElement) {
             <p class="article-summary">${result.summary}</p>
         `);
 
-        // Cache the summary
-        const cachedSummaries = getCachedSummaries() || {};
-        cachedSummaries[article.url] = result.summary;
-        saveToCache(CACHE_KEY_SUMMARIES, cachedSummaries);
+        // Cache the summary with its length
+        const summaries = getCachedSummaries() || {};
+        summaries[article.url] = {
+            text: result.summary,
+            length: summaryLength
+        };
+        saveToCache(CACHE_KEY_SUMMARIES, summaries);
 
     } catch (error) {
         console.error('Error generating summary:', error);
@@ -229,7 +273,6 @@ async function generateSummary(article, articleElement) {
 
 async function refreshArticles() {
     // Don't clear existing articles yet
-    $('#loading').show();
     $('#progress-container').show();
 
     try {
@@ -261,10 +304,18 @@ async function refreshArticles() {
         // Only clear the container right before displaying new articles
         $('#articles-container').empty();
         
-        // Display articles and generate summaries
+        // Display articles with loading spinners for summaries
         result.articles.forEach((article, index) => {
             const articleElement = $(createArticleCard(article, index));
+            // Replace the summary container with a loading spinner
+            articleElement.find('.article-summary-container').html(`
+                <div class="summary-placeholder">
+                    <div class="spinner"></div>
+                    <div>Generating AI summary...</div>
+                </div>
+            `);
             $('#articles-container').append(articleElement);
+            // Generate new summary
             generateSummary(article, articleElement);
         });
 
@@ -280,7 +331,6 @@ async function refreshArticles() {
         // Insert error message at the top without removing existing articles
         $('#articles-container').prepend(errorElement);
     } finally {
-        $('#loading').hide();
         $('#progress-container').hide();
     }
 }
