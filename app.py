@@ -143,9 +143,9 @@ def generate_summary(content, length=2):
 def index():
     return render_template('index.html')
 
-@app.route('/refresh')
+@app.route('/fetch_articles')
 @async_route
-async def refresh():
+async def fetch_articles():
     """Fetch article metadata from Substack inbox"""
     try:
         # Get the article limit from query parameters, default to 5
@@ -285,13 +285,13 @@ async def refresh():
         print(f"Error in refresh: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/summarize', methods=['POST'])
+@app.route('/generate_summary', methods=['POST'])
 @async_route
-async def summarize():
+async def generate_summary_endpoint():
     """Generate summary for a single article"""
     try:
         data = request.json
-        article = data['article']
+        url = data['url']
         length = int(data.get('length', 2))  
         
         async with async_playwright() as p:
@@ -300,7 +300,7 @@ async def summarize():
             page = await context.new_page()
 
             try:
-                content = await get_article_content(page, article['url'])
+                content = await get_article_content(page, url)
                 if not content.startswith("Error"):
                     summary = generate_summary(content, length)
                     if summary:
@@ -308,13 +308,13 @@ async def summarize():
                     else:
                         return jsonify({'error': 'Failed to generate summary'}), 500
                 else:
-                    return jsonify({'error': 'Failed to get content'}), 500
+                    return jsonify({'error': content}), 500
 
             finally:
                 await browser.close()
 
     except Exception as e:
-        print(f"Error in summarize: {str(e)}")
+        print(f"Error in generate_summary: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
