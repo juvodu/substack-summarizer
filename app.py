@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session
 from bs4 import BeautifulSoup
 from openai import OpenAI
 import os
@@ -9,17 +9,27 @@ from functools import wraps
 from asgiref.sync import async_to_sync
 import json
 import httpx
+import secrets
 
 load_dotenv()
 
 app = Flask(__name__)
-client = OpenAI(
-    api_key=os.getenv('OPENAI_API_KEY'),
-    http_client=httpx.Client()
-)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 
-# Cache for article summaries
-article_summaries = {}
+def get_openai_client():
+    """Get OpenAI client from session"""
+    api_key = session.get('api_key')
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key, http_client=httpx.Client())
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('authenticated'):
+            return jsonify({'error': 'Authentication required'}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 def async_route(f):
     @wraps(f)
@@ -45,7 +55,7 @@ async def get_article_content(page, url):
         print(f"Error fetching article content: {str(e)}")
         return f"Error: {str(e)}"
 
-async def login_if_needed(page):
+async def login_if_needed(page, email, password):
     """Check if login is needed and perform login if necessary"""
     try:
         # Check if we're already logged in by looking for the Dashboard button
@@ -58,11 +68,8 @@ async def login_if_needed(page):
         await page.goto('https://substack.com/sign-in')
         
         # Get credentials from env
-        email = os.getenv('SUBSTACK_EMAIL')
-        password = os.getenv('SUBSTACK_PASSWORD')
-        
         if not email or not password:
-            print("No credentials found in .env file. Please add SUBSTACK_EMAIL and SUBSTACK_PASSWORD")
+            print("No credentials found in session. Please log in.")
             print("Waiting for manual login...")
             print("You have 60 seconds to complete the login.")
             
@@ -128,6 +135,10 @@ async def login_if_needed(page):
 def generate_summary(content, length=2):  
     """Generate a summary using OpenAI's API"""
     try:
+        client = get_openai_client()
+        if not client:
+            return "Error: OpenAI client not initialized"
+        
         # Define summary length parameters
         length_settings = {
             1: {"sentences": "1-2", "tokens": 100},  
@@ -154,12 +165,54 @@ def generate_summary(content, length=2):
 def index():
     return render_template('index.html')
 
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        api_key = data.get('apiKey')
+
+        if not all([email, password, api_key]):
+            return jsonify({'error': 'Missing credentials'}), 400
+
+        # Initialize OpenAI client to validate API key
+        try:
+            test_client = OpenAI(api_key=api_key, http_client=httpx.Client())
+            # Test the API key with a minimal request
+            test_client.models.list()
+        except Exception as e:
+            return jsonify({'error': 'Invalid OpenAI API key'}), 401
+
+        # Store credentials in session
+        session['authenticated'] = True
+        session['email'] = email
+        session['password'] = password
+        session['api_key'] = api_key
+
+        return jsonify({'message': 'Login successful'})
+
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'message': 'Logged out successfully'})
+
+@app.route('/api/auth/status', methods=['GET'])
+def auth_status():
+    return jsonify({
+        'authenticated': session.get('authenticated', False)
+    })
+
 @app.route('/fetch_articles')
+@require_auth
 @async_route
 async def fetch_articles():
     """Fetch article metadata from Substack inbox"""
     try:
-        # Get the article limit from query parameters, default to 5
         article_limit = int(request.args.get('limit', 5))
         
         async with async_playwright() as p:
@@ -175,8 +228,15 @@ async def fetch_articles():
             page = await context.new_page()
 
             try:
+                # Use credentials from session
+                email = session.get('email')
+                password = session.get('password')
+                
+                if not email or not password:
+                    return jsonify({'error': 'Session expired'}), 401
+
                 # First check login
-                await login_if_needed(page)
+                await login_if_needed(page, email, password)
                 
                 print("Navigating to inbox...")
                 await page.goto('https://substack.com/inbox')
@@ -300,13 +360,14 @@ async def fetch_articles():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/generate_summary', methods=['POST'])
+@require_auth
 @async_route
 async def generate_summary_endpoint():
     """Generate summary for a single article"""
     try:
-        data = request.json
-        url = data['url']
-        length = int(data.get('length', 2))  
+        data = request.get_json()
+        url = data.get('url')
+        length = data.get('length', '2')
         
         async with async_playwright() as p:
             browser = await p.chromium.launch(

@@ -6,6 +6,257 @@ const SETTINGS_KEY = 'substack_settings';
 
 let currentSummaryLength = '2'; // Default to moderate
 
+// Authentication state
+let isAuthenticated = false;
+
+// Check authentication status
+async function checkAuthStatus() {
+    try {
+        const response = await fetch('/api/auth/status');
+        const data = await response.json();
+        isAuthenticated = data.authenticated;
+        return isAuthenticated;
+    } catch (e) {
+        console.error('Error checking auth status:', e);
+        return false;
+    }
+}
+
+async function login(email, password, apiKey) {
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password, apiKey })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Login failed');
+        }
+
+        isAuthenticated = true;
+        return true;
+    } catch (e) {
+        console.error('Login error:', e);
+        throw e;
+    }
+}
+
+async function logout() {
+    try {
+        await fetch('/api/auth/logout', {
+            method: 'POST'
+        });
+        isAuthenticated = false;
+        
+        // Clear input fields
+        $('#substack-email').val('');
+        $('#substack-password').val('');
+        $('#openai-key').val('');
+        
+        // Clear cached data
+        localStorage.removeItem(CACHE_KEY_ARTICLES);
+        localStorage.removeItem(CACHE_KEY_SUMMARIES);
+        
+        return true;
+    } catch (e) {
+        console.error('Logout error:', e);
+        return false;
+    }
+}
+
+// Check if Credentials Management API is available
+const isCredentialsApiAvailable = () => {
+    return window.PasswordCredential && window.navigator.credentials;
+};
+
+// Secure credential management with Credentials Management API
+async function saveCredentials(email, password, apiKey) {
+    if (!isCredentialsApiAvailable()) {
+        console.error('Credentials Management API not available');
+        return false;
+    }
+
+    try {
+        // Create credentials object
+        const cred = new PasswordCredential({
+            id: email,
+            password: password,
+            name: email,
+            iconURL: window.location.origin + '/static/favicon.svg'
+        });
+
+        // Store the OpenAI API key separately
+        sessionStorage.setItem('openai_api_key', apiKey);
+
+        // Store credentials
+        await navigator.credentials.store(cred);
+        
+        // Prevent silent access to force re-authentication next time
+        await navigator.credentials.preventSilentAccess();
+        
+        return true;
+    } catch (e) {
+        console.error('Error saving credentials:', e);
+        return false;
+    }
+}
+
+async function getCredentials() {
+    if (!isCredentialsApiAvailable()) {
+        console.error('Credentials Management API not available');
+        return null;
+    }
+
+    try {
+        // Request stored credentials
+        const cred = await navigator.credentials.get({
+            password: true,
+            mediation: 'required' // Always show the chooser
+        });
+
+        console.log('Retrieved credentials:', cred); // Debug log
+
+        if (cred && cred instanceof PasswordCredential) {
+            // Get the stored API key
+            const apiKey = sessionStorage.getItem('openai_api_key');
+            
+            return {
+                email: cred.id,
+                password: cred.password,
+                apiKey: apiKey
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error('Error getting credentials:', e);
+        return null;
+    }
+}
+
+async function clearCredentials() {
+    if (!isCredentialsApiAvailable()) {
+        console.error('Credentials Management API not available');
+        return false;
+    }
+
+    try {
+        // Prevent silent access to force re-authentication
+        await navigator.credentials.preventSilentAccess();
+        
+        // Clear API key from session storage
+        sessionStorage.removeItem('openai_api_key');
+        
+        // Clear input fields
+        $('#substack-email').val('');
+        $('#substack-password').val('');
+        $('#openai-key').val('');
+        
+        return true;
+    } catch (e) {
+        console.error('Error clearing credentials:', e);
+        return false;
+    }
+}
+
+async function loadCredentials() {
+    try {
+        console.log('Loading credentials...'); // Debug log
+        const credentials = await getCredentials();
+        console.log('Loaded credentials:', credentials); // Debug log
+        
+        if (credentials) {
+            $('#substack-email').val(credentials.email);
+            $('#substack-password').val(credentials.password);
+            $('#openai-key').val(credentials.apiKey);
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error('Error loading credentials:', e);
+        return false;
+    }
+}
+
+// Encryption functions using Web Crypto API
+async function generateKey() {
+    return await window.crypto.subtle.generateKey(
+        {
+            name: 'AES-GCM',
+            length: 256
+        },
+        true,
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function getOrCreateKey() {
+    const keyString = sessionStorage.getItem('encryptionKey');
+    if (keyString) {
+        const keyBuffer = new Uint8Array(JSON.parse(keyString)).buffer;
+        return await window.crypto.subtle.importKey(
+            'raw',
+            keyBuffer,
+            'AES-GCM',
+            true,
+            ['encrypt', 'decrypt']
+        );
+    }
+    
+    const key = await generateKey();
+    const exportedKey = await window.crypto.subtle.exportKey('raw', key);
+    sessionStorage.setItem('encryptionKey', JSON.stringify(Array.from(new Uint8Array(exportedKey))));
+    return key;
+}
+
+async function encryptData(data) {
+    const key = await getOrCreateKey();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encoder = new TextEncoder();
+    const encodedData = encoder.encode(JSON.stringify(data));
+    
+    const encryptedData = await window.crypto.subtle.encrypt(
+        {
+            name: 'AES-GCM',
+            iv: iv
+        },
+        key,
+        encodedData
+    );
+    
+    return {
+        iv: Array.from(iv),
+        data: Array.from(new Uint8Array(encryptedData))
+    };
+}
+
+async function decryptData(encryptedData) {
+    const key = await getOrCreateKey();
+    const iv = new Uint8Array(encryptedData.iv);
+    const data = new Uint8Array(encryptedData.data);
+    
+    try {
+        const decryptedData = await window.crypto.subtle.decrypt(
+            {
+                name: 'AES-GCM',
+                iv: iv
+            },
+            key,
+            data
+        );
+        
+        const decoder = new TextDecoder();
+        return JSON.parse(decoder.decode(decryptedData));
+    } catch (e) {
+        console.error('Decryption failed:', e);
+        return null;
+    }
+}
+
 function saveToCache(key, data) {
     try {
         localStorage.setItem(key, JSON.stringify({
@@ -272,10 +523,9 @@ async function generateSummary(article, articleElement) {
 }
 
 async function refreshArticles() {
-    // Don't clear existing articles yet
-    $('#progress-container').show();
-
     try {
+        $('#progress-container').show();
+
         const articleLimit = parseInt($('#article-limit').val());
         
         // Save settings
@@ -285,8 +535,15 @@ async function refreshArticles() {
         }));
 
         const response = await fetch(`/fetch_articles?limit=${articleLimit}`);
+        
+        if (response.status === 401) {
+            isAuthenticated = false;
+            $('#access-section').attr('open', true);
+            throw new Error('Authentication required');
+        }
+        
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error('Failed to fetch articles');
         }
 
         const result = await response.json();
@@ -336,18 +593,72 @@ async function refreshArticles() {
 }
 
 // Document ready handler
-$(document).ready(function() {
+$(document).ready(async function() {
     // Load saved settings
     loadSettings();
-    // Display cached articles on page load
-    displayCachedArticles();
     
-    // Event handlers
-    $('#refresh-button').click(refreshArticles);
+    // Check authentication status
+    const authenticated = await checkAuthStatus();
+    if (!authenticated) {
+        // Show access section if not authenticated
+        $('#access-section').attr('open', true);
+    }
     
-    // Update article limit display when slider moves
-    $('#article-limit').on('input', function() {
-        const newLimit = parseInt($(this).val());
-        $('#article-limit-value').text(newLimit);
+    // Handle credential saving
+    $('#save-credentials').click(async function() {
+        const email = $('#substack-email').val();
+        const password = $('#substack-password').val();
+        const apiKey = $('#openai-key').val();
+        
+        if (!email || !password || !apiKey) {
+            alert('Please fill in all credential fields');
+            return;
+        }
+        
+        try {
+            await login(email, password, apiKey);
+            alert('Login successful');
+            $('#access-section').removeAttr('open');
+            await refreshArticles(); // Refresh articles after successful login
+        } catch (e) {
+            alert('Login failed: ' + e.message);
+        }
     });
+    
+    // Handle credential clearing
+    $('#clear-credentials').click(async function() {
+        if (confirm('Are you sure you want to log out?')) {
+            if (await logout()) {
+                alert('Logged out successfully');
+                $('#access-section').attr('open', true);
+            } else {
+                alert('Failed to log out');
+            }
+        }
+    });
+    
+    // Update article limit display
+    $('#article-limit').on('input', function() {
+        $('#article-limit-value').text($(this).val());
+    });
+
+    // Handle radio button changes for summary length
+    $('input[name="summary-length"]').change(function() {
+        currentSummaryLength = $(this).val();
+    });
+
+    // Handle refresh button click
+    $('#refresh-button').click(async function() {
+        if (!isAuthenticated) {
+            alert('Please log in first');
+            $('#access-section').attr('open', true);
+            return;
+        }
+        await refreshArticles();
+    });
+
+    // Load cached articles on startup if authenticated
+    if (authenticated) {
+        displayCachedArticles();
+    }
 });
