@@ -293,10 +293,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .config-section {
     width: 70%;
     margin: 0 auto 20px;
-    background: #fff;
-    border-radius: 8px;
     overflow: hidden;
-    border: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
 }
 
 #refresh-button-container {
@@ -308,8 +306,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
     padding: 15px 20px;
     cursor: pointer;
     color: #666;
+    border-bottom: 1px solid #ddd;
     outline: none;
     transition: background-color 0.2s;
+    user-select: none;
 }
 
 .config-section[open] summary {
@@ -318,6 +318,48 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .config-section .settings-container {
     padding: 20px;
+    animation: collapse 0.3s ease-out forwards;
+    overflow: hidden;
+}
+
+.config-section[open] .settings-container {
+    animation: expand 0.3s ease-out forwards;
+}
+
+@keyframes expand {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 300px;
+        transform: translateY(0);
+    }
+}
+
+@keyframes collapse {
+    from {
+        opacity: 1;
+        max-height: 300px;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+}
+
+.config-section summary::marker,
+.config-section summary::-webkit-details-marker {
+    transition: transform 0.3s ease-out;
+}
+
+.config-section[open] summary::marker,
+.config-section[open] summary::-webkit-details-marker {
+    transform: rotate(90deg);
 }
 
 @keyframes spin {
