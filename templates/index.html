@@ -17,7 +17,13 @@
             <summary>Access</summary>
             <div class="settings-container">
                 <div class="setting">
-                    <label for="substack-email">Substack Email:</label>
+                    <label for="substack-email">
+                        Substack Email:
+                        <span class="help-badge" 
+                            data-tooltip="Credentials are required as Substack does not expose a public API. 
+                            Your credentials are used to web scrape article meta data from your Substack inbox only. 
+                            If you dont have a password you have to set one in Substack first.">?</span>
+                    </label>
                     <input type="email" id="substack-email" placeholder="your@email.com" />
                 </div>
                 <div class="setting">
@@ -25,7 +31,13 @@
                     <input type="password" id="substack-password" />
                 </div>
                 <div class="setting">
-                    <label for="openai-key">OpenAI API Key:</label>
+                    <label for="openai-key">
+                        OpenAI API Key:
+                        <span class="help-badge" 
+                        data-tooltip="An OpenAI API key is required to generate 
+                        AI summaries of your Substack articles. 
+                        You can get your API key from platform.openai.com/api-keys">?</span>
+                    </label>
                     <input type="password" id="openai-key" placeholder="sk-..." />
                     <div id="openai-key-error" class="error-message">Invalid OpenAI API key</div>
                 </div>

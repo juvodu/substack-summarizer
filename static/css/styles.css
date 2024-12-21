@@ -501,3 +501,73 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .error-message.visible {
     display: block;
 }
+
+.help-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: #e0e0e0;
+    color: #666;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: help;
+    margin-left: 6px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.help-badge:hover {
+    background-color: #FF6719;
+    color: white;
+}
+
+.help-badge[data-tooltip] {
+    position: relative;
+}
+
+.help-badge[data-tooltip]::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    background-color: #333;
+    color: white;
+    font-size: 12px;
+    font-weight: normal;
+    border-radius: 4px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.4;
+    z-index: 1000;
+    word-wrap: break-word;
+    min-width: 280px;
+    max-width: 400px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.help-badge[data-tooltip]::after {
+    content: '';
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: #333;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.help-badge[data-tooltip]:hover::before,
+.help-badge[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    top: calc(100% + 10px);
+}
