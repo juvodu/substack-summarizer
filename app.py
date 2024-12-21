@@ -77,20 +77,31 @@ async def login_if_needed(page):
             print("Attempting automatic login...")
             try:
                 # Wait for and fill email field
+                print("Waiting for email field...")
                 await page.wait_for_selector('input[type="email"]')
+                print("Found email field, filling...")
                 await page.fill('input[type="email"]', email)
                 
                 # Click the "Sign in with password" link
+                print("Looking for password login option...")
                 login_option = await page.wait_for_selector('.login-option')
+                print("Found login option, clicking...")
                 await login_option.click()
+                await page.wait_for_timeout(1000)  # Wait a bit after clicking
                 
                 # Wait for and fill password field
+                print("Waiting for password field...")
                 await page.wait_for_selector('input[type="password"]')
+                print("Found password field, filling...")
                 await page.fill('input[type="password"]', password)
+                await page.wait_for_timeout(1000)  # Wait a bit after filling
                 
                 # Click sign in button
+                print("Looking for continue button...")
                 sign_in_button = await page.wait_for_selector('button:has-text("Continue")')
+                print("Found continue button, clicking...")
                 await sign_in_button.click()
+                await page.wait_for_timeout(2000)  # Wait longer after clicking login
                 
                 # Wait for successful login
                 print("Waiting for login completion...")
@@ -154,10 +165,13 @@ async def fetch_articles():
         async with async_playwright() as p:
             print("Launching browser...")
             browser = await p.chromium.launch(
-                headless=False,  
-                slow_mo=50  
+                headless=True,
+                slow_mo=50
             )
-            context = await browser.new_context()
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1280, 'height': 720}
+            )
             page = await context.new_page()
 
             try:
@@ -295,8 +309,14 @@ async def generate_summary_endpoint():
         length = int(data.get('length', 2))  
         
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
+            browser = await p.chromium.launch(
+                headless=True,
+                slow_mo=50
+            )
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1280, 'height': 720}
+            )
             page = await context.new_page()
 
             try:
