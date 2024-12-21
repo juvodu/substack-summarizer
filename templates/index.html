@@ -13,6 +13,27 @@
 <body>
     <div class="control-panel">
         <h1>Substack AI Summarizer</h1>
+        <details class="config-section" id="access-section">
+            <summary>Access</summary>
+            <div class="settings-container">
+                <div class="setting">
+                    <label for="substack-email">Substack Email:</label>
+                    <input type="email" id="substack-email" placeholder="your@email.com" />
+                </div>
+                <div class="setting">
+                    <label for="substack-password">Substack Password:</label>
+                    <input type="password" id="substack-password" />
+                </div>
+                <div class="setting">
+                    <label for="openai-key">OpenAI API Key:</label>
+                    <input type="password" id="openai-key" placeholder="sk-..." />
+                </div>
+                <div class="setting">
+                    <button id="save-credentials" class="primary-button">Save Credentials</button>
+                    <button id="clear-credentials" class="secondary-button">Clear Credentials</button>
+                </div>
+            </div>
+        </details>
         <details class="config-section">
             <summary>Advanced Configuration</summary>
             <div class="settings-container">
