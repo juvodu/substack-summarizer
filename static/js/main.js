@@ -12,12 +12,16 @@ let isAuthenticated = false;
 // Update access section UI based on authentication state
 function updateAccessSectionUI(authenticated) {
     const accessSection = document.getElementById('access-section');
+    const refreshButton = document.getElementById('refresh-button');
+    
     if (authenticated) {
         accessSection.classList.add('authenticated');
         accessSection.removeAttribute('open');
+        refreshButton.disabled = false;
     } else {
         accessSection.classList.remove('authenticated');
         accessSection.setAttribute('open', '');
+        refreshButton.disabled = true;
     }
 }
 
@@ -691,11 +695,6 @@ $(document).ready(async function() {
 
     // Handle refresh button click
     $('#refresh-button').click(async function() {
-        if (!isAuthenticated) {
-            alert('Please log in first');
-            updateAccessSectionUI(false);
-            return;
-        }
         await refreshArticles();
     });
 
