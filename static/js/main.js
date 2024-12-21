@@ -617,14 +617,44 @@ $(document).ready(async function() {
     // Check authentication status
     const authenticated = await checkAuthStatus();
     
+    // Clear invalid state on input
+    $('#access-section input').on('input', function() {
+        $(this).removeClass('invalid');
+        if ($(this).attr('id') === 'openai-key') {
+            $('#openai-key-error').removeClass('visible');
+        }
+    });
+    
     // Handle credential saving
     $('#save-credentials').click(async function() {
-        const email = $('#substack-email').val();
-        const password = $('#substack-password').val();
-        const apiKey = $('#openai-key').val();
+        // Reset any previous invalid states
+        $('#access-section input').removeClass('invalid');
+        $('#openai-key-error').removeClass('visible');
         
-        if (!email || !password || !apiKey) {
-            alert('Please fill in all credential fields');
+        const emailInput = $('#substack-email');
+        const passwordInput = $('#substack-password');
+        const apiKeyInput = $('#openai-key');
+        
+        const email = emailInput.val();
+        const password = passwordInput.val();
+        const apiKey = apiKeyInput.val();
+        
+        let hasError = false;
+        
+        if (!email) {
+            emailInput.addClass('invalid');
+            hasError = true;
+        }
+        if (!password) {
+            passwordInput.addClass('invalid');
+            hasError = true;
+        }
+        if (!apiKey) {
+            apiKeyInput.addClass('invalid');
+            hasError = true;
+        }
+        
+        if (hasError) {
             return;
         }
         
@@ -632,19 +662,21 @@ $(document).ready(async function() {
             await login(email, password, apiKey);
             await refreshArticles(); // Refresh articles after successful login
         } catch (e) {
-            alert('Login failed: ' + e.message);
+            if (e.message.includes('Invalid OpenAI API key')) {
+                // Only mark the API key field as invalid
+                apiKeyInput.addClass('invalid');
+                $('#openai-key-error').addClass('visible');
+            } else {
+                // For other errors, mark email and password as invalid
+                emailInput.addClass('invalid');
+                passwordInput.addClass('invalid');
+            }
         }
     });
     
     // Handle credential clearing
     $('#clear-credentials').click(async function() {
-        if (confirm('Are you sure you want to log out?')) {
-            if (await logout()) {
-                alert('Logged out successfully');
-            } else {
-                alert('Failed to log out');
-            }
-        }
+        await logout();
     });
     
     // Update article limit display
