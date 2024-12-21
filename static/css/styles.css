@@ -338,6 +338,26 @@ input[type="range"]::-webkit-slider-thumb:hover {
     margin-bottom: 20px;
 }
 
+#access-section.authenticated {
+    border-color: #4CAF50;
+}
+
+#access-section.authenticated summary {
+    background-color: #f1f8e9;
+    color: #2E7D32;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#access-section.authenticated summary::after {
+    content: '✓';
+    color: #4CAF50;
+    font-size: 1.2em;
+    margin-left: 8px;
+}
+
 .primary-button {
     background-color: #FF6719;
     color: white;

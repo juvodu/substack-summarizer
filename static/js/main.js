@@ -9,15 +9,29 @@ let currentSummaryLength = '2'; // Default to moderate
 // Authentication state
 let isAuthenticated = false;
 
+// Update access section UI based on authentication state
+function updateAccessSectionUI(authenticated) {
+    const accessSection = document.getElementById('access-section');
+    if (authenticated) {
+        accessSection.classList.add('authenticated');
+        accessSection.removeAttribute('open');
+    } else {
+        accessSection.classList.remove('authenticated');
+        accessSection.setAttribute('open', '');
+    }
+}
+
 // Check authentication status
 async function checkAuthStatus() {
     try {
         const response = await fetch('/api/auth/status');
         const data = await response.json();
         isAuthenticated = data.authenticated;
+        updateAccessSectionUI(isAuthenticated);
         return isAuthenticated;
     } catch (e) {
         console.error('Error checking auth status:', e);
+        updateAccessSectionUI(false);
         return false;
     }
 }
@@ -39,9 +53,11 @@ async function login(email, password, apiKey) {
         }
 
         isAuthenticated = true;
+        updateAccessSectionUI(true);
         return true;
     } catch (e) {
         console.error('Login error:', e);
+        updateAccessSectionUI(false);
         throw e;
     }
 }
@@ -52,6 +68,7 @@ async function logout() {
             method: 'POST'
         });
         isAuthenticated = false;
+        updateAccessSectionUI(false);
         
         // Clear input fields
         $('#substack-email').val('');
@@ -538,7 +555,7 @@ async function refreshArticles() {
         
         if (response.status === 401) {
             isAuthenticated = false;
-            $('#access-section').attr('open', true);
+            updateAccessSectionUI(false);
             throw new Error('Authentication required');
         }
         
@@ -599,10 +616,6 @@ $(document).ready(async function() {
     
     // Check authentication status
     const authenticated = await checkAuthStatus();
-    if (!authenticated) {
-        // Show access section if not authenticated
-        $('#access-section').attr('open', true);
-    }
     
     // Handle credential saving
     $('#save-credentials').click(async function() {
@@ -617,8 +630,6 @@ $(document).ready(async function() {
         
         try {
             await login(email, password, apiKey);
-            alert('Login successful');
-            $('#access-section').removeAttr('open');
             await refreshArticles(); // Refresh articles after successful login
         } catch (e) {
             alert('Login failed: ' + e.message);
@@ -630,7 +641,6 @@ $(document).ready(async function() {
         if (confirm('Are you sure you want to log out?')) {
             if (await logout()) {
                 alert('Logged out successfully');
-                $('#access-section').attr('open', true);
             } else {
                 alert('Failed to log out');
             }
@@ -651,7 +661,7 @@ $(document).ready(async function() {
     $('#refresh-button').click(async function() {
         if (!isAuthenticated) {
             alert('Please log in first');
-            $('#access-section').attr('open', true);
+            updateAccessSectionUI(false);
             return;
         }
         await refreshArticles();
