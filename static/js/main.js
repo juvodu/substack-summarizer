@@ -25,24 +25,24 @@ function updateAccessSectionUI(authenticated) {
     }
 }
 
-// Check authentication status
-async function checkAuthStatus() {
+// Check if credentials are saved
+async function checkCredentials() {
     try {
-        const response = await fetch('/api/auth/status');
+        const response = await fetch('/api/check_credentials');
         const data = await response.json();
         isAuthenticated = data.authenticated;
         updateAccessSectionUI(isAuthenticated);
         return isAuthenticated;
     } catch (e) {
-        console.error('Error checking auth status:', e);
+        console.error('Error checking credentials:', e);
         updateAccessSectionUI(false);
         return false;
     }
 }
 
-async function login(email, password, apiKey) {
+async function saveCredentials(email, password, apiKey) {
     try {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch('/api/save_credentials', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -53,22 +53,22 @@ async function login(email, password, apiKey) {
         const data = await response.json();
         
         if (!response.ok) {
-            throw new Error(data.error || 'Login failed');
+            throw new Error(data.error || 'Failed to save credentials');
         }
 
         isAuthenticated = true;
         updateAccessSectionUI(true);
         return true;
     } catch (e) {
-        console.error('Login error:', e);
+        console.error('Error saving credentials:', e);
         updateAccessSectionUI(false);
         throw e;
     }
 }
 
-async function logout() {
+async function clearCredentials() {
     try {
-        await fetch('/api/auth/logout', {
+        await fetch('/api/clear_credentials', {
             method: 'POST'
         });
         isAuthenticated = false;
@@ -85,7 +85,7 @@ async function logout() {
         
         return true;
     } catch (e) {
-        console.error('Logout error:', e);
+        console.error('Error clearing credentials:', e);
         return false;
     }
 }
@@ -96,7 +96,7 @@ const isCredentialsApiAvailable = () => {
 };
 
 // Secure credential management with Credentials Management API
-async function saveCredentials(email, password, apiKey) {
+async function saveCredentialsSecure(email, password, apiKey) {
     if (!isCredentialsApiAvailable()) {
         console.error('Credentials Management API not available');
         return false;
@@ -127,7 +127,7 @@ async function saveCredentials(email, password, apiKey) {
     }
 }
 
-async function getCredentials() {
+async function getCredentialsSecure() {
     if (!isCredentialsApiAvailable()) {
         console.error('Credentials Management API not available');
         return null;
@@ -159,7 +159,7 @@ async function getCredentials() {
     }
 }
 
-async function clearCredentials() {
+async function clearCredentialsSecure() {
     if (!isCredentialsApiAvailable()) {
         console.error('Credentials Management API not available');
         return false;
@@ -184,10 +184,10 @@ async function clearCredentials() {
     }
 }
 
-async function loadCredentials() {
+async function loadCredentialsSecure() {
     try {
         console.log('Loading credentials...'); // Debug log
-        const credentials = await getCredentials();
+        const credentials = await getCredentialsSecure();
         console.log('Loaded credentials:', credentials); // Debug log
         
         if (credentials) {
@@ -619,7 +619,7 @@ $(document).ready(async function() {
     loadSettings();
     
     // Check authentication status
-    const authenticated = await checkAuthStatus();
+    const authenticated = await checkCredentials();
     
     // Clear invalid state on input
     $('#access-section input').on('input', function() {
@@ -663,7 +663,7 @@ $(document).ready(async function() {
         }
         
         try {
-            await login(email, password, apiKey);
+            await saveCredentials(email, password, apiKey);
             await refreshArticles(); // Refresh articles after successful login
         } catch (e) {
             if (e.message.includes('Invalid OpenAI API key')) {
@@ -680,9 +680,9 @@ $(document).ready(async function() {
     
     // Handle credential clearing
     $('#clear-credentials').click(async function() {
-        await logout();
+        await clearCredentials();
     });
-    
+
     // Update article limit display
     $('#article-limit').on('input', function() {
         $('#article-limit-value').text($(this).val());

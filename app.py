@@ -165,8 +165,8 @@ def generate_summary(content, length=2):
 def index():
     return render_template('index.html')
 
-@app.route('/api/auth/login', methods=['POST'])
-def login():
+@app.route('/api/save_credentials', methods=['POST'])
+def save_credentials():
     try:
         data = request.get_json()
         email = data.get('email')
@@ -190,19 +190,19 @@ def login():
         session['password'] = password
         session['api_key'] = api_key
 
-        return jsonify({'message': 'Login successful'})
+        return jsonify({'message': 'Saved credentials successfully'})
 
     except Exception as e:
-        print(f"Login error: {str(e)}")
+        print(f"Failed to save credentials: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/auth/logout', methods=['POST'])
-def logout():
+@app.route('/api/clear_credentials', methods=['POST'])
+def clear_credentials():
     session.clear()
-    return jsonify({'message': 'Logged out successfully'})
+    return jsonify({'message': 'Cleared credentials successfully'})
 
-@app.route('/api/auth/status', methods=['GET'])
-def auth_status():
+@app.route('/api/check_credentials', methods=['GET'])
+def check_credentials():
     return jsonify({
         'authenticated': session.get('authenticated', False)
     })
