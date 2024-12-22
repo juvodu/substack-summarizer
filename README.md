@@ -1,6 +1,8 @@
 # Substack AI Summarizer
 
-A web app that helps you manage your Substack reading list by providing AI-generated summaries of articles from authors you subscribe to. The app uses web crawling to fetch artcles from your Substack inbox https://substack.com/inbox and uses OpenAI's GPT-3.5 API to generate summaries. This way you can get a quick overview of what's new on your Substack inbox and dive deeper into the most important artcles only. If you are like me and have a huge Substack inbox, this app is a great time saver.
+A web app that helps you manage your Substack reading list by providing AI-generated summaries of articles from authors you subscribe to. The app uses web crawling to fetch artcles from your Substack inbox https://substack.com/inbox and uses OpenAI's GPT-3.5 API to generate a summary for each article. This way you can get a quick overview of what's new on your Substack inbox and dive deeper into the most important artcles only. If you are like me and have a huge Substack inbox, this app is a great time saver.
+
+![Demo of Substack Summarizer](demo.gif)
 
 ## Features
 
