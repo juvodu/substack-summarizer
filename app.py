@@ -132,6 +132,24 @@ async def login_if_needed(page, email, password):
         print(f"Error in login_if_needed: {str(e)}")
         raise e
 
+def estimate_tokens(text):
+    """Estimate the number of tokens in a text string.
+    This is a simple estimation - actual token count may vary."""
+    # GPT models typically use ~4 characters per token on average
+    return len(text) // 4
+
+def truncate_to_token_limit(text, max_tokens=16000):
+    """Truncate text to stay within token limit, leaving room for system message and instructions"""
+    estimated_tokens = estimate_tokens(text)
+    
+    if estimated_tokens <= max_tokens:
+        return text
+        
+    # If text is too long, truncate it proportionally
+    # We use characters as a proxy since we can't count tokens exactly
+    max_chars = (max_tokens * 4)  # Convert tokens to approximate char count
+    return text[:max_chars]
+
 def generate_summary(content, length=2):  
     """Generate a summary using OpenAI's API"""
     try:
@@ -146,13 +164,16 @@ def generate_summary(content, length=2):
             3: {"sentences": "5-6", "tokens": 200}   
         }
         
-        setting = length_settings.get(int(length), length_settings[2])  
+        setting = length_settings.get(int(length), length_settings[2])
+        
+        # Truncate content to fit within token limit
+        truncated_content = truncate_to_token_limit(content)
         
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that creates concise summaries of articles."},
-                {"role": "user", "content": f"Please provide a {setting['sentences']} sentence summary of this article:\n\n{content}"}
+                {"role": "user", "content": f"Please provide a {setting['sentences']} sentence summary of this article:\n\n{truncated_content}"}
             ],
             max_tokens=setting['tokens']
         )
