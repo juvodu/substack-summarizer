@@ -163,7 +163,7 @@ h1 {
 
 .article-thumbnail {
     width: 140px;
-    height: 140px;
+    height: 100px;
     object-fit: cover;
     border-radius: 8px;
     flex-shrink: 0;
